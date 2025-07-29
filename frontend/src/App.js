@@ -1,54 +1,916 @@
-import { useEffect } from "react";
+import React, { useState, useEffect, createContext, useContext } from "react";
 import "./App.css";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
 import axios from "axios";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
 
-const Home = () => {
-  const helloWorldApi = async () => {
+// Auth Context
+const AuthContext = createContext();
+
+const useAuth = () => {
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return context;
+};
+
+const AuthProvider = ({ children }) => {
+  const [user, setUser] = useState(null);
+  const [token, setToken] = useState(localStorage.getItem('token'));
+
+  useEffect(() => {
+    if (token) {
+      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+      fetchProfile();
+    }
+  }, [token]);
+
+  const fetchProfile = async () => {
     try {
-      const response = await axios.get(`${API}/`);
-      console.log(response.data.message);
-    } catch (e) {
-      console.error(e, `errored out requesting / api`);
+      const response = await axios.get(`${API}/profile`);
+      setUser(response.data);
+    } catch (error) {
+      console.error('Failed to fetch profile:', error);
+      logout();
     }
   };
 
-  useEffect(() => {
-    helloWorldApi();
-  }, []);
+  const login = async (employeeNumber, password) => {
+    try {
+      const response = await axios.post(`${API}/login`, {
+        employee_number: employeeNumber,
+        password: password
+      });
+      
+      const { access_token, user: userData } = response.data;
+      setToken(access_token);
+      setUser(userData);
+      localStorage.setItem('token', access_token);
+      axios.defaults.headers.common['Authorization'] = `Bearer ${access_token}`;
+      
+      return { success: true };
+    } catch (error) {
+      return { 
+        success: false, 
+        error: error.response?.data?.detail || 'Login failed' 
+      };
+    }
+  };
+
+  const logout = () => {
+    setUser(null);
+    setToken(null);
+    localStorage.removeItem('token');
+    delete axios.defaults.headers.common['Authorization'];
+  };
 
   return (
-    <div>
-      <header className="App-header">
-        <a
-          className="App-link"
-          href="https://emergent.sh"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <img src="https://avatars.githubusercontent.com/in/1201222?s=120&u=2686cf91179bbafbc7a71bfbc43004cf9ae1acea&v=4" />
-        </a>
-        <p className="mt-5">Building something incredible ~!</p>
-      </header>
+    <AuthContext.Provider value={{ user, login, logout, isAuthenticated: !!user }}>
+      {children}
+    </AuthContext.Provider>
+  );
+};
+
+// Login Component
+const Login = () => {
+  const [employeeNumber, setEmployeeNumber] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const { login } = useAuth();
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
+
+    const result = await login(employeeNumber, password);
+    if (!result.success) {
+      setError(result.error);
+    }
+    setLoading(false);
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
+      <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-8">
+        <div className="text-center mb-8">
+          <h1 className="text-3xl font-bold text-gray-800 mb-2">Laboratory Inventory</h1>
+          <p className="text-gray-600">Management System</p>
+        </div>
+        
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Employee Number
+            </label>
+            <input
+              type="text"
+              value={employeeNumber}
+              onChange={(e) => setEmployeeNumber(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Enter your employee number"
+              required
+            />
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Password
+            </label>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Enter your password"
+              required
+            />
+          </div>
+          
+          {error && (
+            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+              {error}
+            </div>
+          )}
+          
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+          >
+            {loading ? 'Signing In...' : 'Sign In'}
+          </button>
+        </form>
+        
+        <div className="mt-6 text-center text-sm text-gray-500">
+          <p>Default Admin: ADMIN001 / admin123</p>
+        </div>
+      </div>
     </div>
   );
 };
 
+// Dashboard Component
+const Dashboard = () => {
+  const [stats, setStats] = useState(null);
+  const [categoryStats, setCategoryStats] = useState([]);
+  const { user } = useAuth();
+
+  useEffect(() => {
+    fetchDashboardStats();
+    fetchCategoryStats();
+  }, []);
+
+  const fetchDashboardStats = async () => {
+    try {
+      const response = await axios.get(`${API}/dashboard/stats`);
+      setStats(response.data);
+    } catch (error) {
+      console.error('Failed to fetch dashboard stats:', error);
+    }
+  };
+
+  const fetchCategoryStats = async () => {
+    try {
+      const response = await axios.get(`${API}/dashboard/category-stats`);
+      setCategoryStats(response.data);
+    } catch (error) {
+      console.error('Failed to fetch category stats:', error);
+    }
+  };
+
+  if (!stats) {
+    return <div className="flex justify-center items-center h-64">Loading dashboard...</div>;
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold text-gray-800">Dashboard</h1>
+        <p className="text-gray-600">Laboratory Inventory Overview</p>
+      </div>
+
+      {/* Stats Cards */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+        <div className="bg-white p-6 rounded-lg shadow">
+          <div className="text-2xl font-bold text-blue-600">{stats.total_items}</div>
+          <div className="text-sm text-gray-600">Total Items</div>
+        </div>
+        
+        <div className="bg-white p-6 rounded-lg shadow">
+          <div className="text-2xl font-bold text-red-600">{stats.low_stock_items}</div>
+          <div className="text-sm text-gray-600">Low Stock</div>
+        </div>
+        
+        <div className="bg-white p-6 rounded-lg shadow">
+          <div className="text-2xl font-bold text-yellow-600">{stats.expiring_soon}</div>
+          <div className="text-sm text-gray-600">Expiring Soon</div>
+        </div>
+        
+        <div className="bg-white p-6 rounded-lg shadow">
+          <div className="text-2xl font-bold text-gray-600">{stats.expired_items}</div>
+          <div className="text-sm text-gray-600">Expired</div>
+        </div>
+        
+        <div className="bg-white p-6 rounded-lg shadow">
+          <div className="text-2xl font-bold text-purple-600">{stats.pending_requests}</div>
+          <div className="text-sm text-gray-600">Pending Requests</div>
+        </div>
+      </div>
+
+      {/* Category Stats */}
+      <div className="bg-white p-6 rounded-lg shadow">
+        <h3 className="text-lg font-semibold mb-4">Stock by Category</h3>
+        <div className="space-y-2">
+          {categoryStats.map((cat, index) => (
+            <div key={index} className="flex justify-between items-center p-2 bg-gray-50 rounded">
+              <span className="font-medium">{cat._id}</span>
+              <div className="text-sm text-gray-600">
+                {cat.total_items} items • {cat.total_quantity} units
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Inventory Component
+const Inventory = () => {
+  const [items, setItems] = useState([]);
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [editingItem, setEditingItem] = useState(null);
+  const { user } = useAuth();
+
+  useEffect(() => {
+    fetchInventory();
+  }, []);
+
+  const fetchInventory = async () => {
+    try {
+      const response = await axios.get(`${API}/inventory`);
+      setItems(response.data);
+    } catch (error) {
+      console.error('Failed to fetch inventory:', error);
+    }
+  };
+
+  const isAdmin = user?.role === 'admin';
+
+  return (
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-800">Inventory Management</h1>
+          <p className="text-gray-600">Manage laboratory stock items</p>
+        </div>
+        {isAdmin && (
+          <button
+            onClick={() => setShowAddForm(true)}
+            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+          >
+            Add New Item
+          </button>
+        )}
+      </div>
+
+      {/* Items Table */}
+      <div className="bg-white rounded-lg shadow overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Item Name</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Category</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Location</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Quantity</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Reorder Level</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                {isAdmin && <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>}
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {items.map((item) => (
+                <tr key={item.id} className="hover:bg-gray-50">
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="font-medium text-gray-900">{item.item_name}</div>
+                    <div className="text-sm text-gray-500">{item.catalogue_no}</div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.category}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.location}</td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className="text-sm font-medium">{item.quantity} {item.uom}</span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.reorder_level}</td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                      item.quantity <= item.reorder_level 
+                        ? 'bg-red-100 text-red-800' 
+                        : 'bg-green-100 text-green-800'
+                    }`}>
+                      {item.quantity <= item.reorder_level ? 'Low Stock' : 'In Stock'}
+                    </span>
+                  </td>
+                  {isAdmin && (
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                      <button
+                        onClick={() => setEditingItem(item)}
+                        className="text-blue-600 hover:text-blue-900 mr-3"
+                      >
+                        Edit
+                      </button>
+                    </td>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Add/Edit Item Modal */}
+      {(showAddForm || editingItem) && (
+        <ItemFormModal
+          item={editingItem}
+          onClose={() => {
+            setShowAddForm(false);
+            setEditingItem(null);
+          }}
+          onSubmit={() => {
+            fetchInventory();
+            setShowAddForm(false);
+            setEditingItem(null);
+          }}
+        />
+      )}
+    </div>
+  );
+};
+
+// Item Form Modal Component
+const ItemFormModal = ({ item, onClose, onSubmit }) => {
+  const [formData, setFormData] = useState({
+    item_name: item?.item_name || '',
+    category: item?.category || '',
+    sub_category: item?.sub_category || '',
+    location: item?.location || '',
+    manufacturer: item?.manufacturer || '',
+    supplier: item?.supplier || '',
+    model: item?.model || '',
+    uom: item?.uom || '',
+    catalogue_no: item?.catalogue_no || '',
+    quantity: item?.quantity || 0,
+    target_stock_level: item?.target_stock_level || 0,
+    reorder_level: item?.reorder_level || 0,
+    validity: item?.validity ? new Date(item.validity).toISOString().split('T')[0] : '',
+    use_case: item?.use_case || ''
+  });
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      const payload = {
+        ...formData,
+        quantity: parseInt(formData.quantity),
+        target_stock_level: parseInt(formData.target_stock_level),
+        reorder_level: parseInt(formData.reorder_level),
+        validity: formData.validity ? new Date(formData.validity) : null
+      };
+
+      if (item) {
+        await axios.put(`${API}/inventory/${item.id}`, payload);
+      } else {
+        await axios.post(`${API}/inventory`, payload);
+      }
+      
+      onSubmit();
+    } catch (error) {
+      console.error('Failed to save item:', error);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="p-6">
+          <h2 className="text-xl font-bold mb-4">
+            {item ? 'Edit Item' : 'Add New Item'}
+          </h2>
+          
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Item Name</label>
+                <input
+                  type="text"
+                  value={formData.item_name}
+                  onChange={(e) => setFormData({...formData, item_name: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  required
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
+                <input
+                  type="text"
+                  value={formData.category}
+                  onChange={(e) => setFormData({...formData, category: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  required
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Sub Category</label>
+                <input
+                  type="text"
+                  value={formData.sub_category}
+                  onChange={(e) => setFormData({...formData, sub_category: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
+                <input
+                  type="text"
+                  value={formData.location}
+                  onChange={(e) => setFormData({...formData, location: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  required
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Manufacturer</label>
+                <input
+                  type="text"
+                  value={formData.manufacturer}
+                  onChange={(e) => setFormData({...formData, manufacturer: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  required
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Supplier</label>
+                <input
+                  type="text"
+                  value={formData.supplier}
+                  onChange={(e) => setFormData({...formData, supplier: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  required
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Model</label>
+                <input
+                  type="text"
+                  value={formData.model}
+                  onChange={(e) => setFormData({...formData, model: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  required
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Unit of Measurement</label>
+                <input
+                  type="text"
+                  value={formData.uom}
+                  onChange={(e) => setFormData({...formData, uom: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  required
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Catalogue No.</label>
+                <input
+                  type="text"
+                  value={formData.catalogue_no}
+                  onChange={(e) => setFormData({...formData, catalogue_no: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  required
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Quantity</label>
+                <input
+                  type="number"
+                  value={formData.quantity}
+                  onChange={(e) => setFormData({...formData, quantity: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  required
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Target Stock Level</label>
+                <input
+                  type="number"
+                  value={formData.target_stock_level}
+                  onChange={(e) => setFormData({...formData, target_stock_level: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  required
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Reorder Level</label>
+                <input
+                  type="number"
+                  value={formData.reorder_level}
+                  onChange={(e) => setFormData({...formData, reorder_level: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  required
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Validity Date</label>
+                <input
+                  type="date"
+                  value={formData.validity}
+                  onChange={(e) => setFormData({...formData, validity: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Use Case</label>
+              <textarea
+                value={formData.use_case}
+                onChange={(e) => setFormData({...formData, use_case: e.target.value})}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                rows="3"
+                required
+              />
+            </div>
+            
+            <div className="flex justify-end space-x-3 pt-4">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-4 py-2 text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+              >
+                {item ? 'Update' : 'Add'} Item
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Withdrawal Requests Component
+const WithdrawalRequests = () => {
+  const [requests, setRequests] = useState([]);
+  const [showRequestForm, setShowRequestForm] = useState(false);
+  const [inventory, setInventory] = useState([]);
+  const { user } = useAuth();
+
+  useEffect(() => {
+    fetchRequests();
+    fetchInventory();
+  }, []);
+
+  const fetchRequests = async () => {
+    try {
+      const response = await axios.get(`${API}/withdrawal-requests`);
+      setRequests(response.data);
+    } catch (error) {
+      console.error('Failed to fetch requests:', error);
+    }
+  };
+
+  const fetchInventory = async () => {
+    try {
+      const response = await axios.get(`${API}/inventory`);
+      setInventory(response.data);
+    } catch (error) {
+      console.error('Failed to fetch inventory:', error);
+    }
+  };
+
+  const processRequest = async (requestId, action, comments = '') => {
+    try {
+      await axios.post(`${API}/withdrawal-requests/process`, {
+        request_id: requestId,
+        action: action,
+        comments: comments
+      });
+      fetchRequests();
+    } catch (error) {
+      console.error('Failed to process request:', error);
+    }
+  };
+
+  const isAdmin = user?.role === 'admin';
+
+  return (
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-800">Withdrawal Requests</h1>
+          <p className="text-gray-600">Manage material withdrawal requests</p>
+        </div>
+        <button
+          onClick={() => setShowRequestForm(true)}
+          className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700"
+        >
+          New Request
+        </button>
+      </div>
+
+      {/* Requests Table */}
+      <div className="bg-white rounded-lg shadow overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Item</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Quantity</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Requested By</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Purpose</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
+                {isAdmin && <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>}
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {requests.map((request) => (
+                <tr key={request.id} className="hover:bg-gray-50">
+                  <td className="px-6 py-4 whitespace-nowrap font-medium text-gray-900">
+                    {request.item_name}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    {request.requested_quantity}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    {request.requested_by_name}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    {request.purpose}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                      request.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                      request.status === 'approved' ? 'bg-green-100 text-green-800' :
+                      'bg-red-100 text-red-800'
+                    }`}>
+                      {request.status.charAt(0).toUpperCase() + request.status.slice(1)}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    {new Date(request.created_at).toLocaleDateString()}
+                  </td>
+                  {isAdmin && request.status === 'pending' && (
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                      <button
+                        onClick={() => processRequest(request.id, 'approve')}
+                        className="text-green-600 hover:text-green-900 mr-3"
+                      >
+                        Approve
+                      </button>
+                      <button
+                        onClick={() => processRequest(request.id, 'reject')}
+                        className="text-red-600 hover:text-red-900"
+                      >
+                        Reject
+                      </button>
+                    </td>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Request Form Modal */}
+      {showRequestForm && (
+        <RequestFormModal
+          inventory={inventory}
+          onClose={() => setShowRequestForm(false)}
+          onSubmit={() => {
+            fetchRequests();
+            setShowRequestForm(false);
+          }}
+        />
+      )}
+    </div>
+  );
+};
+
+// Request Form Modal Component
+const RequestFormModal = ({ inventory, onClose, onSubmit }) => {
+  const [formData, setFormData] = useState({
+    item_id: '',
+    requested_quantity: 1,
+    purpose: ''
+  });
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      await axios.post(`${API}/withdrawal-requests`, {
+        ...formData,
+        requested_quantity: parseInt(formData.requested_quantity)
+      });
+      onSubmit();
+    } catch (error) {
+      console.error('Failed to create request:', error);
+      alert(error.response?.data?.detail || 'Failed to create request');
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-lg max-w-md w-full">
+        <div className="p-6">
+          <h2 className="text-xl font-bold mb-4">New Withdrawal Request</h2>
+          
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Select Item</label>
+              <select
+                value={formData.item_id}
+                onChange={(e) => setFormData({...formData, item_id: e.target.value})}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                required
+              >
+                <option value="">Select an item</option>
+                {inventory.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.item_name} (Available: {item.quantity} {item.uom})
+                  </option>
+                ))}
+              </select>
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Requested Quantity</label>
+              <input
+                type="number"
+                min="1"
+                value={formData.requested_quantity}
+                onChange={(e) => setFormData({...formData, requested_quantity: e.target.value})}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                required
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Purpose</label>
+              <textarea
+                value={formData.purpose}
+                onChange={(e) => setFormData({...formData, purpose: e.target.value})}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                rows="3"
+                placeholder="Describe the purpose of this request..."
+                required
+              />
+            </div>
+            
+            <div className="flex justify-end space-x-3 pt-4">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-4 py-2 text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
+              >
+                Submit Request
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Main Layout Component
+const Layout = ({ children }) => {
+  const { user, logout } = useAuth();
+  const [currentPage, setCurrentPage] = useState('dashboard');
+
+  const navigation = [
+    { id: 'dashboard', name: 'Dashboard', icon: '📊' },
+    { id: 'inventory', name: 'Inventory', icon: '📦' },
+    { id: 'requests', name: 'Requests', icon: '📋' },
+  ];
+
+  const renderPage = () => {
+    switch (currentPage) {
+      case 'dashboard':
+        return <Dashboard />;
+      case 'inventory':
+        return <Inventory />;
+      case 'requests':
+        return <WithdrawalRequests />;
+      default:
+        return <Dashboard />;
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      {/* Header */}
+      <header className="bg-white shadow-sm border-b">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center h-16">
+            <div className="flex items-center">
+              <h1 className="text-xl font-semibold text-gray-900">Laboratory Inventory</h1>
+            </div>
+            
+            <div className="flex items-center space-x-4">
+              <span className="text-sm text-gray-700">
+                {user?.full_name} ({user?.role})
+              </span>
+              <button
+                onClick={logout}
+                className="text-sm text-red-600 hover:text-red-900"
+              >
+                Logout
+              </button>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="flex gap-8">
+          {/* Sidebar */}
+          <nav className="w-64 bg-white rounded-lg shadow p-6">
+            <ul className="space-y-2">
+              {navigation.map((item) => (
+                <li key={item.id}>
+                  <button
+                    onClick={() => setCurrentPage(item.id)}
+                    className={`w-full flex items-center px-3 py-2 text-left rounded-md transition-colors ${
+                      currentPage === item.id
+                        ? 'bg-blue-100 text-blue-700'
+                        : 'text-gray-600 hover:bg-gray-100'
+                    }`}
+                  >
+                    <span className="mr-3">{item.icon}</span>
+                    {item.name}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </nav>
+
+          {/* Main Content */}
+          <main className="flex-1">
+            {children || renderPage()}
+          </main>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Main App Component
 function App() {
   return (
     <div className="App">
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Home />}>
-            <Route index element={<Home />} />
-          </Route>
-        </Routes>
-      </BrowserRouter>
+      <AuthProvider>
+        <AppContent />
+      </AuthProvider>
     </div>
   );
 }
+
+const AppContent = () => {
+  const { isAuthenticated } = useAuth();
+
+  if (!isAuthenticated) {
+    return <Login />;
+  }
+
+  return <Layout />;
+};
 
 export default App;
