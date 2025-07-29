@@ -621,8 +621,6 @@ async def export_inventory_to_excel(filter: str = 'all', current_user: User = De
             summary_data.append(['Total Items', total_items])
             summary_data.append(['In Stock', in_stock_items])
             summary_data.append(['Zero Stock', zero_stock_items])
-            summary_data.append(['Below Reorder Level', below_reorder_items])
-            summary_data.append(['Below Target Stock', below_target_items])
             summary_data.append(['Low Stock', low_stock_items])
             summary_data.append(['Expiring Soon', expiring_items])
             summary_data.append(['Expired', expired_items])
