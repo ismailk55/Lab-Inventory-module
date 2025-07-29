@@ -392,6 +392,7 @@ const Inventory = ({ initialFilter = 'all' }) => {
   const downloadExcel = async () => {
     try {
       const response = await axios.get(`${API}/inventory/export/excel`, {
+        params: { filter: currentFilter },
         responseType: 'blob', // Important for file download
       });
       
@@ -400,9 +401,10 @@ const Inventory = ({ initialFilter = 'all' }) => {
       const link = document.createElement('a');
       link.href = url;
       
-      // Generate filename with timestamp
+      // Generate filename with timestamp and filter
       const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
-      link.setAttribute('download', `inventory_export_${timestamp}.xlsx`);
+      const filterSuffix = currentFilter !== 'all' ? `_${currentFilter}` : '';
+      link.setAttribute('download', `inventory_export${filterSuffix}_${timestamp}.xlsx`);
       
       // Append to html link element page
       document.body.appendChild(link);
