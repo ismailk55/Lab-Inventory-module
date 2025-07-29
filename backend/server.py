@@ -657,7 +657,8 @@ async def export_inventory_to_excel(filter: str = 'all', current_user: User = De
         )
         
     except Exception as e:
-        logger.error(f"Error exporting inventory to Excel: {str(e)}")
+        import logging
+        logging.error(f"Error exporting inventory to Excel: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to export inventory: {str(e)}"
