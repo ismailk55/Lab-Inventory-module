@@ -1029,16 +1029,22 @@ const UserFormModal = ({ onClose, onSubmit }) => {
 };
 
 // Withdrawal Requests Component
-const WithdrawalRequests = () => {
+const WithdrawalRequests = ({ initialFilter = 'all' }) => {
   const [requests, setRequests] = useState([]);
+  const [filteredRequests, setFilteredRequests] = useState([]);
   const [showRequestForm, setShowRequestForm] = useState(false);
   const [inventory, setInventory] = useState([]);
+  const [currentFilter, setCurrentFilter] = useState(initialFilter);
   const { user } = useAuth();
 
   useEffect(() => {
     fetchRequests();
     fetchInventory();
   }, []);
+
+  useEffect(() => {
+    applyFilter();
+  }, [requests, currentFilter]);
 
   const fetchRequests = async () => {
     try {
@@ -1058,6 +1064,28 @@ const WithdrawalRequests = () => {
     }
   };
 
+  const applyFilter = () => {
+    let filtered = [...requests];
+
+    switch (currentFilter) {
+      case 'pending':
+        filtered = requests.filter(request => request.status === 'pending');
+        break;
+      case 'approved':
+        filtered = requests.filter(request => request.status === 'approved');
+        break;
+      case 'rejected':
+        filtered = requests.filter(request => request.status === 'rejected');
+        break;
+      case 'all':
+      default:
+        filtered = requests;
+        break;
+    }
+
+    setFilteredRequests(filtered);
+  };
+
   const processRequest = async (requestId, action, comments = '') => {
     try {
       await axios.post(`${API}/withdrawal-requests/process`, {
@@ -1071,21 +1099,100 @@ const WithdrawalRequests = () => {
     }
   };
 
+  const getFilterTitle = () => {
+    switch (currentFilter) {
+      case 'pending':
+        return 'Pending Withdrawal Requests';
+      case 'approved':
+        return 'Approved Withdrawal Requests';
+      case 'rejected':
+        return 'Rejected Withdrawal Requests';
+      case 'all':
+      default:
+        return 'All Withdrawal Requests';
+    }
+  };
+
+  const getFilterDescription = () => {
+    switch (currentFilter) {
+      case 'pending':
+        return 'Requests waiting for admin approval';
+      case 'approved':
+        return 'Requests that have been approved and processed';
+      case 'rejected':
+        return 'Requests that have been rejected';
+      case 'all':
+      default:
+        return 'Complete list of material withdrawal requests';
+    }
+  };
+
   const isAdmin = user?.role === 'admin';
 
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold text-gray-800">Withdrawal Requests</h1>
-          <p className="text-gray-600">Manage material withdrawal requests</p>
+          <h1 className="text-2xl font-bold text-gray-800">{getFilterTitle()}</h1>
+          <p className="text-gray-600">{getFilterDescription()}</p>
         </div>
-        <button
-          onClick={() => setShowRequestForm(true)}
-          className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700"
-        >
-          New Request
-        </button>
+        <div className="flex space-x-3">
+          {/* Filter Buttons */}
+          <div className="flex space-x-2">
+            <button
+              onClick={() => setCurrentFilter('all')}
+              className={`px-3 py-1 text-sm rounded ${
+                currentFilter === 'all'
+                  ? 'bg-blue-100 text-blue-700'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              All
+            </button>
+            <button
+              onClick={() => setCurrentFilter('pending')}
+              className={`px-3 py-1 text-sm rounded ${
+                currentFilter === 'pending'
+                  ? 'bg-yellow-100 text-yellow-700'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              Pending
+            </button>
+            <button
+              onClick={() => setCurrentFilter('approved')}
+              className={`px-3 py-1 text-sm rounded ${
+                currentFilter === 'approved'
+                  ? 'bg-green-100 text-green-700'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              Approved
+            </button>
+            <button
+              onClick={() => setCurrentFilter('rejected')}
+              className={`px-3 py-1 text-sm rounded ${
+                currentFilter === 'rejected'
+                  ? 'bg-red-100 text-red-700'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              Rejected
+            </button>
+          </div>
+          
+          <button
+            onClick={() => setShowRequestForm(true)}
+            className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700"
+          >
+            New Request
+          </button>
+        </div>
+      </div>
+
+      {/* Results Summary */}
+      <div className="text-sm text-gray-600">
+        Showing {filteredRequests.length} of {requests.length} requests
       </div>
 
       {/* Requests Table */}
@@ -1104,7 +1211,7 @@ const WithdrawalRequests = () => {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {requests.map((request) => (
+              {filteredRequests.map((request) => (
                 <tr key={request.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap font-medium text-gray-900">
                     {request.item_name}
@@ -1115,7 +1222,7 @@ const WithdrawalRequests = () => {
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                     {request.requested_by_name}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  <td className="px-6 py-4 text-sm text-gray-900 max-w-xs truncate">
                     {request.purpose}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
@@ -1146,12 +1253,30 @@ const WithdrawalRequests = () => {
                       </button>
                     </td>
                   )}
+                  {isAdmin && request.status !== 'pending' && (
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                      <span className="text-gray-400">
+                        {request.status === 'approved' ? 'Approved' : 'Rejected'}
+                      </span>
+                    </td>
+                  )}
+                  {!isAdmin && (
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                      <span className="text-gray-400">View Only</span>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
       </div>
+
+      {filteredRequests.length === 0 && (
+        <div className="text-center py-8">
+          <p className="text-gray-500">No requests found matching the current filter.</p>
+        </div>
+      )}
 
       {/* Request Form Modal */}
       {showRequestForm && (
