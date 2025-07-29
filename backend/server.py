@@ -462,7 +462,7 @@ async def delete_user(user_id: str, admin: User = Depends(get_admin_user)):
 
 # Excel Export Route
 @api_router.get("/inventory/export/excel")
-async def export_inventory_to_excel(current_user: User = Depends(get_current_user)):
+async def export_inventory_to_excel(filter: str = 'all', current_user: User = Depends(get_current_user)):
     try:
         # Fetch all inventory items
         items = await db.inventory.find().to_list(1000)
@@ -470,30 +470,92 @@ async def export_inventory_to_excel(current_user: User = Depends(get_current_use
         if not items:
             raise HTTPException(status_code=404, detail="No inventory items found")
         
+        # Apply filter to items before creating Excel
+        filtered_items = []
+        now = datetime.now()
+        next_month = now + timedelta(days=30)
+        
+        for item in items:
+            include_item = False
+            
+            # Check validity dates
+            is_expired = False
+            is_expiring_soon = False
+            if item.get('validity'):
+                try:
+                    validity_date = datetime.fromisoformat(item['validity'].replace('Z', '+00:00')) if isinstance(item['validity'], str) else item['validity']
+                    validity_date_naive = validity_date.replace(tzinfo=None) if validity_date.tzinfo else validity_date
+                    is_expired = validity_date_naive < now
+                    is_expiring_soon = validity_date_naive <= next_month and validity_date_naive >= now
+                except:
+                    pass
+            
+            # Check stock levels
+            quantity = item.get('quantity', 0)
+            reorder_level = item.get('reorder_level', 0)
+            target_stock_level = item.get('target_stock_level', 0)
+            is_low_stock = quantity <= reorder_level
+            is_below_reorder = quantity < reorder_level
+            is_below_target = quantity < target_stock_level
+            is_zero_stock = quantity == 0
+            
+            # Apply filter logic
+            if filter == 'all':
+                include_item = True
+            elif filter == 'low_stock':
+                include_item = is_low_stock
+            elif filter == 'below_reorder':
+                include_item = is_below_reorder
+            elif filter == 'below_target':
+                include_item = is_below_target
+            elif filter == 'zero_stock':
+                include_item = is_zero_stock
+            elif filter == 'expiring_soon':
+                include_item = is_expiring_soon
+            elif filter == 'expired':
+                include_item = is_expired
+            
+            if include_item:
+                filtered_items.append(item)
+        
+        if not filtered_items:
+            raise HTTPException(status_code=404, detail=f"No inventory items found for filter: {filter}")
+        
         # Convert to DataFrame
         df_data = []
-        for item in items:
+        for item in filtered_items:
             # Calculate status
-            is_low_stock = item.get('quantity', 0) <= item.get('reorder_level', 0)
+            quantity = item.get('quantity', 0)
+            reorder_level = item.get('reorder_level', 0)
+            target_stock_level = item.get('target_stock_level', 0)
+            
+            is_zero_stock = quantity == 0
+            is_below_reorder = quantity < reorder_level
+            is_below_target = quantity < target_stock_level
+            is_low_stock = quantity <= reorder_level
             is_expired = False
             is_expiring_soon = False
             
             if item.get('validity'):
                 try:
                     validity_date = datetime.fromisoformat(item['validity'].replace('Z', '+00:00')) if isinstance(item['validity'], str) else item['validity']
-                    now = datetime.now(validity_date.tzinfo) if validity_date.tzinfo else datetime.now()
-                    next_month = now + timedelta(days=30)
-                    
-                    is_expired = validity_date < now
-                    is_expiring_soon = validity_date <= next_month and validity_date >= now
+                    validity_date_naive = validity_date.replace(tzinfo=None) if validity_date.tzinfo else validity_date
+                    is_expired = validity_date_naive < now
+                    is_expiring_soon = validity_date_naive <= next_month and validity_date_naive >= now
                 except:
                     pass
             
-            # Determine primary status
+            # Determine primary status with priority
             if is_expired:
                 status = "Expired"
+            elif is_zero_stock:
+                status = "Zero Stock"
+            elif is_below_reorder:
+                status = "Below Reorder Level"
             elif is_expiring_soon:
                 status = "Expiring Soon"
+            elif is_below_target:
+                status = "Below Target Stock"
             elif is_low_stock:
                 status = "Low Stock"
             else:
@@ -509,10 +571,10 @@ async def export_inventory_to_excel(current_user: User = Depends(get_current_use
                 'Model': item.get('model', ''),
                 'Unit of Measurement': item.get('uom', ''),
                 'Catalogue Number': item.get('catalogue_no', ''),
-                'Current Quantity': item.get('quantity', 0),
-                'Target Stock Level': item.get('target_stock_level', 0),
-                'Reorder Level': item.get('reorder_level', 0),
-                'Validity Date': validity_date.strftime('%Y-%m-%d') if item.get('validity') and not is_expired else (item.get('validity', '') if item.get('validity') else 'N/A'),
+                'Current Quantity': quantity,
+                'Target Stock Level': target_stock_level,
+                'Reorder Level': reorder_level,
+                'Validity Date': validity_date_naive.strftime('%Y-%m-%d') if item.get('validity') and not is_expired else (item.get('validity', '') if item.get('validity') else 'N/A'),
                 'Use Case': item.get('use_case', ''),
                 'Status': status,
                 'Added By': item.get('added_by', ''),
@@ -528,11 +590,12 @@ async def export_inventory_to_excel(current_user: User = Depends(get_current_use
         
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
             # Write main inventory data
-            df.to_excel(writer, sheet_name='Inventory', index=False)
+            sheet_name = f'Inventory_{filter.replace("_", " ").title()}' if filter != 'all' else 'Inventory'
+            df.to_excel(writer, sheet_name=sheet_name, index=False)
             
             # Get workbook and worksheet for formatting
             workbook = writer.book
-            worksheet = writer.sheets['Inventory']
+            worksheet = writer.sheets[sheet_name]
             
             # Auto-adjust column widths
             for column in worksheet.columns:
@@ -552,13 +615,20 @@ async def export_inventory_to_excel(current_user: User = Depends(get_current_use
             # Add summary sheet
             summary_data = []
             total_items = len(df)
+            zero_stock_items = len(df[df['Status'] == 'Zero Stock'])
+            below_reorder_items = len(df[df['Status'] == 'Below Reorder Level'])
+            below_target_items = len(df[df['Status'] == 'Below Target Stock'])
             low_stock_items = len(df[df['Status'] == 'Low Stock'])
             expiring_items = len(df[df['Status'] == 'Expiring Soon'])
             expired_items = len(df[df['Status'] == 'Expired'])
             in_stock_items = len(df[df['Status'] == 'In Stock'])
             
+            summary_data.append(['Filter Applied', filter.replace('_', ' ').title()])
             summary_data.append(['Total Items', total_items])
             summary_data.append(['In Stock', in_stock_items])
+            summary_data.append(['Zero Stock', zero_stock_items])
+            summary_data.append(['Below Reorder Level', below_reorder_items])
+            summary_data.append(['Below Target Stock', below_target_items])
             summary_data.append(['Low Stock', low_stock_items])
             summary_data.append(['Expiring Soon', expiring_items])
             summary_data.append(['Expired', expired_items])
@@ -584,9 +654,10 @@ async def export_inventory_to_excel(current_user: User = Depends(get_current_use
         
         output.seek(0)
         
-        # Generate filename with timestamp
+        # Generate filename with timestamp and filter
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        filename = f"inventory_export_{timestamp}.xlsx"
+        filter_suffix = f"_{filter}" if filter != 'all' else ''
+        filename = f"inventory_export{filter_suffix}_{timestamp}.xlsx"
         
         # Return file as download
         return StreamingResponse(
