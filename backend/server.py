@@ -60,6 +60,7 @@ class UserCreate(BaseModel):
     role: UserRole
     full_name: str
     email: str
+    section: str
 
 class UserLogin(BaseModel):
     employee_number: str
