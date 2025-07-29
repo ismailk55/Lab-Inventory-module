@@ -51,6 +51,7 @@ class User(BaseModel):
     role: UserRole
     full_name: str
     email: str
+    section: str
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 class UserCreate(BaseModel):
