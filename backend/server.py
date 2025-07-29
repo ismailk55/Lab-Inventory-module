@@ -460,6 +460,148 @@ async def delete_user(user_id: str, admin: User = Depends(get_admin_user)):
         raise HTTPException(status_code=404, detail="User not found")
     return {"message": "User deleted successfully"}
 
+# Excel Export Route
+@api_router.get("/inventory/export/excel")
+async def export_inventory_to_excel(current_user: User = Depends(get_current_user)):
+    try:
+        # Fetch all inventory items
+        items = await db.inventory.find().to_list(1000)
+        
+        if not items:
+            raise HTTPException(status_code=404, detail="No inventory items found")
+        
+        # Convert to DataFrame
+        df_data = []
+        for item in items:
+            # Calculate status
+            is_low_stock = item.get('quantity', 0) <= item.get('reorder_level', 0)
+            is_expired = False
+            is_expiring_soon = False
+            
+            if item.get('validity'):
+                try:
+                    validity_date = datetime.fromisoformat(item['validity'].replace('Z', '+00:00')) if isinstance(item['validity'], str) else item['validity']
+                    now = datetime.now(validity_date.tzinfo) if validity_date.tzinfo else datetime.now()
+                    next_month = now + timedelta(days=30)
+                    
+                    is_expired = validity_date < now
+                    is_expiring_soon = validity_date <= next_month and validity_date >= now
+                except:
+                    pass
+            
+            # Determine primary status
+            if is_expired:
+                status = "Expired"
+            elif is_expiring_soon:
+                status = "Expiring Soon"
+            elif is_low_stock:
+                status = "Low Stock"
+            else:
+                status = "In Stock"
+            
+            df_data.append({
+                'Item Name': item.get('item_name', ''),
+                'Category': item.get('category', ''),
+                'Sub Category': item.get('sub_category', ''),
+                'Location': item.get('location', ''),
+                'Manufacturer': item.get('manufacturer', ''),
+                'Supplier': item.get('supplier', ''),
+                'Model': item.get('model', ''),
+                'Unit of Measurement': item.get('uom', ''),
+                'Catalogue Number': item.get('catalogue_no', ''),
+                'Current Quantity': item.get('quantity', 0),
+                'Target Stock Level': item.get('target_stock_level', 0),
+                'Reorder Level': item.get('reorder_level', 0),
+                'Validity Date': validity_date.strftime('%Y-%m-%d') if item.get('validity') and not is_expired else (item.get('validity', '') if item.get('validity') else 'N/A'),
+                'Use Case': item.get('use_case', ''),
+                'Status': status,
+                'Added By': item.get('added_by', ''),
+                'Created Date': item.get('created_at', datetime.now()).strftime('%Y-%m-%d %H:%M:%S') if item.get('created_at') else '',
+                'Last Updated': item.get('updated_at', '').strftime('%Y-%m-%d %H:%M:%S') if item.get('updated_at') else ''
+            })
+        
+        # Create DataFrame
+        df = pd.DataFrame(df_data)
+        
+        # Create Excel file in memory
+        output = io.BytesIO()
+        
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            # Write main inventory data
+            df.to_excel(writer, sheet_name='Inventory', index=False)
+            
+            # Get workbook and worksheet for formatting
+            workbook = writer.book
+            worksheet = writer.sheets['Inventory']
+            
+            # Auto-adjust column widths
+            for column in worksheet.columns:
+                max_length = 0
+                column_letter = column[0].column_letter
+                
+                for cell in column:
+                    try:
+                        if len(str(cell.value)) > max_length:
+                            max_length = len(str(cell.value))
+                    except:
+                        pass
+                
+                adjusted_width = min(max_length + 2, 50)  # Cap at 50 characters
+                worksheet.column_dimensions[column_letter].width = adjusted_width
+            
+            # Add summary sheet
+            summary_data = []
+            total_items = len(df)
+            low_stock_items = len(df[df['Status'] == 'Low Stock'])
+            expiring_items = len(df[df['Status'] == 'Expiring Soon'])
+            expired_items = len(df[df['Status'] == 'Expired'])
+            in_stock_items = len(df[df['Status'] == 'In Stock'])
+            
+            summary_data.append(['Total Items', total_items])
+            summary_data.append(['In Stock', in_stock_items])
+            summary_data.append(['Low Stock', low_stock_items])
+            summary_data.append(['Expiring Soon', expiring_items])
+            summary_data.append(['Expired', expired_items])
+            summary_data.append(['Export Date', datetime.now().strftime('%Y-%m-%d %H:%M:%S')])
+            summary_data.append(['Exported By', current_user.full_name])
+            
+            summary_df = pd.DataFrame(summary_data, columns=['Metric', 'Value'])
+            summary_df.to_excel(writer, sheet_name='Summary', index=False)
+            
+            # Format summary sheet
+            summary_worksheet = writer.sheets['Summary']
+            for column in summary_worksheet.columns:
+                max_length = 0
+                column_letter = column[0].column_letter
+                for cell in column:
+                    try:
+                        if len(str(cell.value)) > max_length:
+                            max_length = len(str(cell.value))
+                    except:
+                        pass
+                adjusted_width = max_length + 2
+                summary_worksheet.column_dimensions[column_letter].width = adjusted_width
+        
+        output.seek(0)
+        
+        # Generate filename with timestamp
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f"inventory_export_{timestamp}.xlsx"
+        
+        # Return file as download
+        return StreamingResponse(
+            io.BytesIO(output.read()),
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": f"attachment; filename={filename}"}
+        )
+        
+    except Exception as e:
+        logger.error(f"Error exporting inventory to Excel: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to export inventory: {str(e)}"
+        )
+
 # Include the router in the main app
 app.include_router(api_router)
 
