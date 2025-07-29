@@ -271,15 +271,21 @@ const DashboardCard = ({ title, value, color, onClick }) => {
 };
 
 // Inventory Component
-const Inventory = () => {
+const Inventory = ({ initialFilter = 'all' }) => {
   const [items, setItems] = useState([]);
+  const [filteredItems, setFilteredItems] = useState([]);
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
+  const [currentFilter, setCurrentFilter] = useState(initialFilter);
   const { user } = useAuth();
 
   useEffect(() => {
     fetchInventory();
   }, []);
+
+  useEffect(() => {
+    applyFilter();
+  }, [items, currentFilter]);
 
   const fetchInventory = async () => {
     try {
@@ -290,23 +296,135 @@ const Inventory = () => {
     }
   };
 
+  const applyFilter = () => {
+    let filtered = [...items];
+    const now = new Date();
+    const nextMonth = new Date();
+    nextMonth.setMonth(nextMonth.getMonth() + 1);
+
+    switch (currentFilter) {
+      case 'low_stock':
+        filtered = items.filter(item => item.quantity <= item.reorder_level);
+        break;
+      case 'expiring_soon':
+        filtered = items.filter(item => {
+          if (!item.validity) return false;
+          const validityDate = new Date(item.validity);
+          return validityDate <= nextMonth && validityDate >= now;
+        });
+        break;
+      case 'expired':
+        filtered = items.filter(item => {
+          if (!item.validity) return false;
+          const validityDate = new Date(item.validity);
+          return validityDate < now;
+        });
+        break;
+      case 'all':
+      default:
+        filtered = items;
+        break;
+    }
+
+    setFilteredItems(filtered);
+  };
+
+  const getFilterTitle = () => {
+    switch (currentFilter) {
+      case 'low_stock':
+        return 'Low Stock Items';
+      case 'expiring_soon':
+        return 'Items Expiring Soon';
+      case 'expired':
+        return 'Expired Items';
+      case 'all':
+      default:
+        return 'All Inventory Items';
+    }
+  };
+
+  const getFilterDescription = () => {
+    switch (currentFilter) {
+      case 'low_stock':
+        return 'Items that have reached or fallen below their reorder level';
+      case 'expiring_soon':
+        return 'Items expiring within the next month';
+      case 'expired':
+        return 'Items that have passed their validity date';
+      case 'all':
+      default:
+        return 'Complete laboratory stock inventory';
+    }
+  };
+
   const isAdmin = user?.role === 'admin';
 
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold text-gray-800">Inventory Management</h1>
-          <p className="text-gray-600">Manage laboratory stock items</p>
+          <h1 className="text-2xl font-bold text-gray-800">{getFilterTitle()}</h1>
+          <p className="text-gray-600">{getFilterDescription()}</p>
         </div>
-        {isAdmin && (
-          <button
-            onClick={() => setShowAddForm(true)}
-            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
-          >
-            Add New Item
-          </button>
-        )}
+        <div className="flex space-x-3">
+          {/* Filter Buttons */}
+          <div className="flex space-x-2">
+            <button
+              onClick={() => setCurrentFilter('all')}
+              className={`px-3 py-1 text-sm rounded ${
+                currentFilter === 'all'
+                  ? 'bg-blue-100 text-blue-700'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              All
+            </button>
+            <button
+              onClick={() => setCurrentFilter('low_stock')}
+              className={`px-3 py-1 text-sm rounded ${
+                currentFilter === 'low_stock'
+                  ? 'bg-red-100 text-red-700'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              Low Stock
+            </button>
+            <button
+              onClick={() => setCurrentFilter('expiring_soon')}
+              className={`px-3 py-1 text-sm rounded ${
+                currentFilter === 'expiring_soon'
+                  ? 'bg-yellow-100 text-yellow-700'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              Expiring
+            </button>
+            <button
+              onClick={() => setCurrentFilter('expired')}
+              className={`px-3 py-1 text-sm rounded ${
+                currentFilter === 'expired'
+                  ? 'bg-gray-100 text-gray-700'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              Expired
+            </button>
+          </div>
+          
+          {isAdmin && (
+            <button
+              onClick={() => setShowAddForm(true)}
+              className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+            >
+              Add New Item
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Results Summary */}
+      <div className="text-sm text-gray-600">
+        Showing {filteredItems.length} of {items.length} items
       </div>
 
       {/* Items Table */}
@@ -320,48 +438,81 @@ const Inventory = () => {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Location</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Quantity</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Reorder Level</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Validity</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
                 {isAdmin && <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>}
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {items.map((item) => (
-                <tr key={item.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="font-medium text-gray-900">{item.item_name}</div>
-                    <div className="text-sm text-gray-500">{item.catalogue_no}</div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.category}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.location}</td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className="text-sm font-medium">{item.quantity} {item.uom}</span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.reorder_level}</td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                      item.quantity <= item.reorder_level 
-                        ? 'bg-red-100 text-red-800' 
-                        : 'bg-green-100 text-green-800'
-                    }`}>
-                      {item.quantity <= item.reorder_level ? 'Low Stock' : 'In Stock'}
-                    </span>
-                  </td>
-                  {isAdmin && (
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <button
-                        onClick={() => setEditingItem(item)}
-                        className="text-blue-600 hover:text-blue-900 mr-3"
-                      >
-                        Edit
-                      </button>
+              {filteredItems.map((item) => {
+                const isLowStock = item.quantity <= item.reorder_level;
+                const isExpired = item.validity && new Date(item.validity) < new Date();
+                const isExpiringSoon = item.validity && 
+                  new Date(item.validity) <= new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) &&
+                  new Date(item.validity) >= new Date();
+
+                return (
+                  <tr key={item.id} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="font-medium text-gray-900">{item.item_name}</div>
+                      <div className="text-sm text-gray-500">{item.catalogue_no}</div>
                     </td>
-                  )}
-                </tr>
-              ))}
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.category}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.location}</td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className="text-sm font-medium">{item.quantity} {item.uom}</span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.reorder_level}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {item.validity ? new Date(item.validity).toLocaleDateString() : 'N/A'}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex flex-col space-y-1">
+                        {isExpired && (
+                          <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-800">
+                            Expired
+                          </span>
+                        )}
+                        {!isExpired && isExpiringSoon && (
+                          <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800">
+                            Expiring Soon
+                          </span>
+                        )}
+                        {isLowStock && (
+                          <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800">
+                            Low Stock
+                          </span>
+                        )}
+                        {!isLowStock && !isExpired && !isExpiringSoon && (
+                          <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
+                            In Stock
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                    {isAdmin && (
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                        <button
+                          onClick={() => setEditingItem(item)}
+                          className="text-blue-600 hover:text-blue-900 mr-3"
+                        >
+                          Edit
+                        </button>
+                      </td>
+                    )}
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
       </div>
+
+      {filteredItems.length === 0 && (
+        <div className="text-center py-8">
+          <p className="text-gray-500">No items found matching the current filter.</p>
+        </div>
+      )}
 
       {/* Add/Edit Item Modal */}
       {(showAddForm || editingItem) && (
