@@ -1485,9 +1485,16 @@ def run_all_tests():
     test_results['user_management'] = test_user_management()
     test_results['inventory'] = test_inventory_management()
     test_results['withdrawal_requests'] = test_withdrawal_requests()
+    
+    # NEW TESTS FOR REVIEW REQUEST
+    test_results['withdrawal_requests_ordering'] = test_withdrawal_requests_ordering()
+    test_results['removed_inventory_filters'] = test_removed_inventory_filters()
+    test_results['excel_export_valid_filters'] = test_excel_export_valid_filters()
+    
     test_results['dashboard'] = test_dashboard_analytics()
     test_results['email_config'] = test_email_configuration()
     test_results['excel_export'] = test_excel_export()
+    test_results['enhanced_excel_filtering'] = test_enhanced_excel_export_filtering()
     test_results['role_access'] = test_role_based_access()
     
     # Summary
