@@ -347,10 +347,6 @@ const Inventory = ({ initialFilter = 'all' }) => {
     switch (currentFilter) {
       case 'low_stock':
         return 'Low Stock Items';
-      case 'below_reorder':
-        return 'Below Reorder Level Items';
-      case 'below_target':
-        return 'Below Target Stock Level Items';
       case 'zero_stock':
         return 'Zero Stock Items';
       case 'expiring_soon':
@@ -367,10 +363,6 @@ const Inventory = ({ initialFilter = 'all' }) => {
     switch (currentFilter) {
       case 'low_stock':
         return 'Items that have reached or fallen below their reorder level';
-      case 'below_reorder':
-        return 'Items with quantity below the reorder level';
-      case 'below_target':
-        return 'Items with quantity below the target stock level';
       case 'zero_stock':
         return 'Items with zero quantity in stock';
       case 'expiring_soon':
