@@ -610,8 +610,6 @@ async def export_inventory_to_excel(filter: str = 'all', current_user: User = De
             summary_data = []
             total_items = len(df)
             zero_stock_items = len(df[df['Status'] == 'Zero Stock'])
-            below_reorder_items = len(df[df['Status'] == 'Below Reorder Level'])
-            below_target_items = len(df[df['Status'] == 'Below Target Stock'])
             low_stock_items = len(df[df['Status'] == 'Low Stock'])
             expiring_items = len(df[df['Status'] == 'Expiring Soon'])
             expired_items = len(df[df['Status'] == 'Expired'])
