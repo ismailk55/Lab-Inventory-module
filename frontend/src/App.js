@@ -315,8 +315,8 @@ const Inventory = ({ initialFilter = 'all' }) => {
 
     switch (currentFilter) {
       case 'low_stock':
-        // Low stock: quantity <= reorder_level AND quantity > 0 (not zero)
-        filtered = items.filter(item => item.quantity <= item.reorder_level && item.quantity > 0);
+        // Low stock: quantity <= reorder_level (includes zero quantity items)
+        filtered = items.filter(item => item.quantity <= item.reorder_level);
         break;
       case 'zero_stock':
         // Zero stock: quantity exactly equals 0
