@@ -974,6 +974,252 @@ def test_excel_export():
     
     return True
 
+def test_withdrawal_requests_ordering():
+    """Test that withdrawal requests are ordered from newest to oldest"""
+    
+    print("=" * 60)
+    print("TESTING WITHDRAWAL REQUESTS ORDERING")
+    print("=" * 60)
+    
+    if not auth_token or not test_item_id:
+        print_test_result("Withdrawal Requests Ordering Tests", False, "Missing auth token or test item")
+        return False
+    
+    headers = {"Authorization": f"Bearer {auth_token}"}
+    
+    # Create multiple withdrawal requests with slight delays to ensure different timestamps
+    request_ids = []
+    request_purposes = [
+        "First request - should appear last in list",
+        "Second request - should appear second to last",
+        "Third request - should appear first in list"
+    ]
+    
+    import time
+    
+    for i, purpose in enumerate(request_purposes):
+        withdrawal_request = {
+            "item_id": test_item_id,
+            "requested_quantity": 1,
+            "purpose": purpose
+        }
+        
+        try:
+            response = requests.post(f"{API_URL}/withdrawal-requests", json=withdrawal_request, headers=headers)
+            if response.status_code == 200:
+                request_data = response.json()
+                request_ids.append({
+                    'id': request_data.get("id"),
+                    'purpose': purpose,
+                    'created_at': request_data.get("created_at")
+                })
+                print(f"Created request {i+1}: {purpose}")
+                time.sleep(1)  # Small delay to ensure different timestamps
+            else:
+                print_test_result(
+                    f"Create Withdrawal Request {i+1}", 
+                    False, 
+                    f"Status: {response.status_code}, Response: {response.text}"
+                )
+                return False
+        except Exception as e:
+            print_test_result(f"Create Withdrawal Request {i+1}", False, f"Exception: {str(e)}")
+            return False
+    
+    # Now fetch all withdrawal requests and verify ordering
+    try:
+        response = requests.get(f"{API_URL}/withdrawal-requests", headers=headers)
+        if response.status_code == 200:
+            requests_list = response.json()
+            
+            if len(requests_list) >= 3:
+                # Check if the first request in the list has the most recent created_at timestamp
+                first_request = requests_list[0]
+                first_created_at = first_request.get('created_at')
+                
+                # Verify that requests are in descending order by created_at
+                is_properly_ordered = True
+                previous_timestamp = None
+                
+                for i, req in enumerate(requests_list[:3]):  # Check first 3 requests
+                    current_timestamp = req.get('created_at')
+                    if previous_timestamp and current_timestamp > previous_timestamp:
+                        is_properly_ordered = False
+                        break
+                    previous_timestamp = current_timestamp
+                
+                if is_properly_ordered:
+                    print_test_result(
+                        "Withdrawal Requests Descending Order", 
+                        True, 
+                        f"Requests properly ordered by created_at (newest first). First request created at: {first_created_at}"
+                    )
+                else:
+                    print_test_result(
+                        "Withdrawal Requests Descending Order", 
+                        False, 
+                        "Requests are not properly ordered by created_at in descending order"
+                    )
+                
+                # Verify that the newest request (last created) appears first in the list
+                newest_request_purpose = request_purposes[-1]  # "Third request - should appear first"
+                first_request_purpose = first_request.get('purpose', '')
+                
+                if newest_request_purpose in first_request_purpose:
+                    print_test_result(
+                        "Newest Request Appears First", 
+                        True, 
+                        f"Newest request correctly appears first: {first_request_purpose}"
+                    )
+                else:
+                    print_test_result(
+                        "Newest Request Appears First", 
+                        False, 
+                        f"Expected newest request first, but got: {first_request_purpose}"
+                    )
+                
+            else:
+                print_test_result(
+                    "Withdrawal Requests Ordering", 
+                    False, 
+                    f"Not enough requests to test ordering. Found: {len(requests_list)}"
+                )
+                
+        else:
+            print_test_result(
+                "Fetch Withdrawal Requests for Ordering Test", 
+                False, 
+                f"Status: {response.status_code}, Response: {response.text}"
+            )
+            return False
+            
+    except Exception as e:
+        print_test_result("Withdrawal Requests Ordering Test", False, f"Exception: {str(e)}")
+        return False
+    
+    return True
+
+def test_removed_inventory_filters():
+    """Test that below_reorder and below_target filters are no longer supported"""
+    
+    print("=" * 60)
+    print("TESTING REMOVED INVENTORY FILTERS")
+    print("=" * 60)
+    
+    if not auth_token:
+        print_test_result("Removed Filters Tests", False, "No auth token available")
+        return False
+    
+    headers = {"Authorization": f"Bearer {auth_token}"}
+    
+    # Test that below_reorder and below_target filters are not supported in Excel export
+    removed_filters = ['below_reorder', 'below_target']
+    
+    for filter_name in removed_filters:
+        try:
+            response = requests.get(f"{API_URL}/inventory/export/excel?filter={filter_name}", headers=headers)
+            
+            # The filter should either:
+            # 1. Return 404 (no items found - treating as invalid filter)
+            # 2. Return 400 (bad request - filter not supported)
+            # 3. Default to 'all' filter behavior (fallback)
+            
+            if response.status_code == 404:
+                print_test_result(
+                    f"Removed Filter '{filter_name}' Not Supported", 
+                    True, 
+                    f"Filter correctly not supported (404 - no items found for invalid filter)"
+                )
+            elif response.status_code == 400:
+                print_test_result(
+                    f"Removed Filter '{filter_name}' Not Supported", 
+                    True, 
+                    f"Filter correctly rejected (400 - bad request)"
+                )
+            elif response.status_code == 200:
+                # If it returns 200, it might be defaulting to 'all' - check if it's actually filtering
+                content_disposition = response.headers.get('content-disposition', '')
+                if filter_name not in content_disposition:
+                    print_test_result(
+                        f"Removed Filter '{filter_name}' Not Supported", 
+                        True, 
+                        f"Filter ignored and defaulted to general export (filename doesn't contain filter name)"
+                    )
+                else:
+                    print_test_result(
+                        f"Removed Filter '{filter_name}' Not Supported", 
+                        False, 
+                        f"Filter appears to be still supported (filename contains filter name)"
+                    )
+            else:
+                print_test_result(
+                    f"Removed Filter '{filter_name}' Not Supported", 
+                    False, 
+                    f"Unexpected status code: {response.status_code}"
+                )
+                
+        except Exception as e:
+            print_test_result(f"Removed Filter '{filter_name}' Test", False, f"Exception: {str(e)}")
+    
+    return True
+
+def test_excel_export_valid_filters():
+    """Test that only valid filters are supported in Excel export"""
+    
+    print("=" * 60)
+    print("TESTING EXCEL EXPORT VALID FILTERS")
+    print("=" * 60)
+    
+    if not auth_token:
+        print_test_result("Excel Export Valid Filters Tests", False, "No auth token available")
+        return False
+    
+    headers = {"Authorization": f"Bearer {auth_token}"}
+    
+    # Valid filters that should be supported
+    valid_filters = ['all', 'low_stock', 'zero_stock', 'expiring_soon', 'expired']
+    
+    for filter_name in valid_filters:
+        try:
+            response = requests.get(f"{API_URL}/inventory/export/excel?filter={filter_name}", headers=headers)
+            
+            if response.status_code == 200:
+                # Check that it's a valid Excel file
+                content_type = response.headers.get('content-type', '')
+                expected_content_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                content = response.content
+                
+                if content_type == expected_content_type and content.startswith(b'PK'):
+                    print_test_result(
+                        f"Valid Filter '{filter_name}' Supported", 
+                        True, 
+                        f"Filter works correctly, returns valid Excel file ({len(content)} bytes)"
+                    )
+                else:
+                    print_test_result(
+                        f"Valid Filter '{filter_name}' Supported", 
+                        False, 
+                        f"Filter returns invalid Excel file or wrong content type"
+                    )
+            elif response.status_code == 404:
+                # 404 is acceptable if no items match the filter
+                print_test_result(
+                    f"Valid Filter '{filter_name}' Supported", 
+                    True, 
+                    f"Filter supported but no matching items found (404 - acceptable)"
+                )
+            else:
+                print_test_result(
+                    f"Valid Filter '{filter_name}' Supported", 
+                    False, 
+                    f"Unexpected status code: {response.status_code}"
+                )
+                
+        except Exception as e:
+            print_test_result(f"Valid Filter '{filter_name}' Test", False, f"Exception: {str(e)}")
+    
+    return True
+
 def test_enhanced_excel_export_filtering():
     """Test enhanced Excel export functionality with filtering parameters"""
     
@@ -987,12 +1233,10 @@ def test_enhanced_excel_export_filtering():
     
     headers = {"Authorization": f"Bearer {auth_token}"}
     
-    # Available filters to test
+    # Available filters to test (UPDATED - removed below_reorder and below_target)
     filters_to_test = [
         'all',
         'low_stock', 
-        'below_reorder',
-        'below_target',
         'zero_stock',
         'expiring_soon',
         'expired'
