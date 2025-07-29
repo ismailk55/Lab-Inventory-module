@@ -808,6 +808,7 @@ def run_all_tests():
     
     # Run tests in priority order
     test_results['authentication'] = test_authentication()
+    test_results['user_management'] = test_user_management()
     test_results['inventory'] = test_inventory_management()
     test_results['withdrawal_requests'] = test_withdrawal_requests()
     test_results['dashboard'] = test_dashboard_analytics()
