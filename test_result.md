@@ -120,6 +120,21 @@ backend:
         agent: "testing"
         comment: "✅ PASSED - Authentication system fully functional. Admin login (ADMIN001/admin123) successful, JWT token generation working, profile access verified, invalid credentials properly rejected. Role-based access control protecting admin endpoints correctly."
 
+  - task: "User Management System with Section Field"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Added comprehensive user management functionality: Updated User model with section field, GET /api/users endpoint for listing users (admin only), POST /api/register with section field requirement, DELETE /api/users/{user_id} for user deletion with admin self-deletion prevention, updated login/profile responses to include section field"
+      - working: true
+        agent: "testing"
+        comment: "✅ PASSED - All user management functionality working perfectly. Login response includes section field (IT Administration), profile response includes section field, GET /api/users lists all users with section data (admin only access verified), POST /api/register creates users with section field (Quality Control Department test user created successfully), DELETE /api/users/{user_id} deletes users correctly, admin self-deletion prevention working, role-based access control properly implemented. Fixed ObjectId serialization issue in users endpoint. All 8 comprehensive test scenarios passed."
+
   - task: "Inventory Management CRUD Operations"
     implemented: true
     working: true
