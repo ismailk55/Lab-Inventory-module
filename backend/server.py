@@ -248,7 +248,8 @@ async def get_profile(current_user: User = Depends(get_current_user)):
         "employee_number": current_user.employee_number,
         "full_name": current_user.full_name,
         "role": current_user.role,
-        "email": current_user.email
+        "email": current_user.email,
+        "section": current_user.section
     }
 
 # Inventory Management Routes
