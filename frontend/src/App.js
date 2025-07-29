@@ -1098,6 +1098,8 @@ const Layout = ({ children }) => {
         return <Inventory />;
       case 'requests':
         return <WithdrawalRequests />;
+      case 'users':
+        return <UserManagement />;
       default:
         return <Dashboard />;
     }
