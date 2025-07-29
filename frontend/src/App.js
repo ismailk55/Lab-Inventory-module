@@ -1117,7 +1117,7 @@ const Layout = ({ children }) => {
             
             <div className="flex items-center space-x-4">
               <span className="text-sm text-gray-700">
-                {user?.full_name} ({user?.role})
+                {user?.full_name} ({user?.section}) - {user?.role}
               </span>
               <button
                 onClick={logout}
