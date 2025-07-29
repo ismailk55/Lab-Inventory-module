@@ -433,6 +433,29 @@ async def delete_email_config(email_id: str, admin: User = Depends(get_admin_use
         raise HTTPException(status_code=404, detail="Email config not found")
     return {"message": "Email configuration deleted successfully"}
 
+# User Management Routes (Admin only)
+@api_router.get("/users")
+async def get_all_users(admin: User = Depends(get_admin_user)):
+    users = await db.users.find().to_list(1000)
+    # Remove password_hash from response
+    for user in users:
+        user.pop('password_hash', None)
+    return users
+
+@api_router.delete("/users/{user_id}")
+async def delete_user(user_id: str, admin: User = Depends(get_admin_user)):
+    # Prevent admin from deleting themselves
+    if user_id == admin.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot delete your own account"
+        )
+    
+    result = await db.users.delete_one({"id": user_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {"message": "User deleted successfully"}
+
 # Include the router in the main app
 app.include_router(api_router)
 
