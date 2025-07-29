@@ -1389,6 +1389,19 @@ const RequestFormModal = ({ inventory, onClose, onSubmit }) => {
 const Layout = ({ children }) => {
   const { user, logout } = useAuth();
   const [currentPage, setCurrentPage] = useState('dashboard');
+  const [pageProps, setPageProps] = useState({});
+
+  // Set up global navigation function for dashboard cards
+  useEffect(() => {
+    window.dashboardNavigation = (page, filter) => {
+      setCurrentPage(page);
+      setPageProps(filter ? { initialFilter: filter } : {});
+    };
+    
+    return () => {
+      delete window.dashboardNavigation;
+    };
+  }, []);
 
   const navigation = [
     { id: 'dashboard', name: 'Dashboard', icon: '📊' },
@@ -1397,14 +1410,19 @@ const Layout = ({ children }) => {
     ...(user?.role === 'admin' ? [{ id: 'users', name: 'Users', icon: '👥' }] : []),
   ];
 
+  const handleNavigation = (pageId) => {
+    setCurrentPage(pageId);
+    setPageProps({}); // Reset page props when navigating via sidebar
+  };
+
   const renderPage = () => {
     switch (currentPage) {
       case 'dashboard':
         return <Dashboard />;
       case 'inventory':
-        return <Inventory />;
+        return <Inventory {...pageProps} />;
       case 'requests':
-        return <WithdrawalRequests />;
+        return <WithdrawalRequests {...pageProps} />;
       case 'users':
         return <UserManagement />;
       default:
