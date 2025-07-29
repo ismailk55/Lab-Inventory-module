@@ -750,6 +750,230 @@ def test_user_management():
     
     return True
 
+def test_excel_export():
+    """Test Excel export functionality for inventory management"""
+    
+    print("=" * 60)
+    print("TESTING EXCEL EXPORT FUNCTIONALITY")
+    print("=" * 60)
+    
+    if not auth_token:
+        print_test_result("Excel Export Tests", False, "No auth token available")
+        return False
+    
+    headers = {"Authorization": f"Bearer {auth_token}"}
+    
+    # Test 1: Authentication Test - Valid JWT token
+    try:
+        response = requests.get(f"{API_URL}/inventory/export/excel", headers=headers)
+        if response.status_code == 200:
+            print_test_result(
+                "Excel Export Authentication (Valid Token)", 
+                True, 
+                "Successfully authenticated with valid JWT token"
+            )
+        else:
+            print_test_result(
+                "Excel Export Authentication (Valid Token)", 
+                False, 
+                f"Status: {response.status_code}, Response: {response.text}"
+            )
+            return False
+    except Exception as e:
+        print_test_result("Excel Export Authentication (Valid Token)", False, f"Exception: {str(e)}")
+        return False
+    
+    # Test 2: Authentication Test - No token (should fail)
+    try:
+        response = requests.get(f"{API_URL}/inventory/export/excel")
+        if response.status_code == 401 or response.status_code == 403:
+            print_test_result(
+                "Excel Export Authentication (No Token)", 
+                True, 
+                f"Correctly rejected request without authentication (Status: {response.status_code})"
+            )
+        else:
+            print_test_result(
+                "Excel Export Authentication (No Token)", 
+                False, 
+                f"Expected 401/403, got {response.status_code}"
+            )
+    except Exception as e:
+        print_test_result("Excel Export Authentication (No Token)", False, f"Exception: {str(e)}")
+    
+    # Test 3: Excel File Generation with Correct Headers
+    try:
+        response = requests.get(f"{API_URL}/inventory/export/excel", headers=headers)
+        if response.status_code == 200:
+            # Check Content-Type header
+            content_type = response.headers.get('content-type', '')
+            expected_content_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            
+            if content_type == expected_content_type:
+                print_test_result(
+                    "Excel Export Content-Type Header", 
+                    True, 
+                    f"Correct Content-Type: {content_type}"
+                )
+            else:
+                print_test_result(
+                    "Excel Export Content-Type Header", 
+                    False, 
+                    f"Expected: {expected_content_type}, Got: {content_type}"
+                )
+            
+            # Check Content-Disposition header
+            content_disposition = response.headers.get('content-disposition', '')
+            if 'attachment' in content_disposition and 'inventory_export_' in content_disposition and '.xlsx' in content_disposition:
+                print_test_result(
+                    "Excel Export Content-Disposition Header", 
+                    True, 
+                    f"Correct filename format: {content_disposition}"
+                )
+            else:
+                print_test_result(
+                    "Excel Export Content-Disposition Header", 
+                    False, 
+                    f"Incorrect Content-Disposition: {content_disposition}"
+                )
+        else:
+            print_test_result(
+                "Excel Export Headers Test", 
+                False, 
+                f"Status: {response.status_code}, Response: {response.text}"
+            )
+    except Exception as e:
+        print_test_result("Excel Export Headers Test", False, f"Exception: {str(e)}")
+    
+    # Test 4: Content Validation - Binary Data and File Size
+    try:
+        response = requests.get(f"{API_URL}/inventory/export/excel", headers=headers)
+        if response.status_code == 200:
+            content = response.content
+            content_length = len(content)
+            
+            # Check if content is not empty
+            if content_length > 0:
+                print_test_result(
+                    "Excel Export Content Size", 
+                    True, 
+                    f"File size: {content_length} bytes (not empty)"
+                )
+            else:
+                print_test_result(
+                    "Excel Export Content Size", 
+                    False, 
+                    "File is empty"
+                )
+            
+            # Check if content appears to be binary (Excel file)
+            # Excel files start with specific bytes (PK for ZIP format)
+            if content.startswith(b'PK'):
+                print_test_result(
+                    "Excel Export Binary Content", 
+                    True, 
+                    "Content appears to be valid Excel file (ZIP format)"
+                )
+            else:
+                print_test_result(
+                    "Excel Export Binary Content", 
+                    False, 
+                    "Content does not appear to be valid Excel file"
+                )
+            
+            # Check reasonable file size (should be at least 5KB for a proper Excel file)
+            if content_length >= 5000:
+                print_test_result(
+                    "Excel Export Reasonable File Size", 
+                    True, 
+                    f"File size is reasonable: {content_length} bytes"
+                )
+            else:
+                print_test_result(
+                    "Excel Export Reasonable File Size", 
+                    False, 
+                    f"File size too small: {content_length} bytes"
+                )
+        else:
+            print_test_result(
+                "Excel Export Content Validation", 
+                False, 
+                f"Status: {response.status_code}"
+            )
+    except Exception as e:
+        print_test_result("Excel Export Content Validation", False, f"Exception: {str(e)}")
+    
+    # Test 5: Edge Case - Test with existing inventory data
+    try:
+        # First check if we have inventory items
+        inventory_response = requests.get(f"{API_URL}/inventory", headers=headers)
+        if inventory_response.status_code == 200:
+            inventory_items = inventory_response.json()
+            item_count = len(inventory_items)
+            
+            # Now test Excel export
+            response = requests.get(f"{API_URL}/inventory/export/excel", headers=headers)
+            if response.status_code == 200:
+                print_test_result(
+                    "Excel Export with Existing Data", 
+                    True, 
+                    f"Successfully exported {item_count} inventory items to Excel"
+                )
+            else:
+                print_test_result(
+                    "Excel Export with Existing Data", 
+                    False, 
+                    f"Export failed with status: {response.status_code}"
+                )
+        else:
+            print_test_result(
+                "Excel Export Data Check", 
+                False, 
+                "Could not retrieve inventory data for validation"
+            )
+    except Exception as e:
+        print_test_result("Excel Export with Existing Data", False, f"Exception: {str(e)}")
+    
+    # Test 6: Test filename format validation
+    try:
+        response = requests.get(f"{API_URL}/inventory/export/excel", headers=headers)
+        if response.status_code == 200:
+            content_disposition = response.headers.get('content-disposition', '')
+            # Extract filename from Content-Disposition header
+            if 'filename=' in content_disposition:
+                filename = content_disposition.split('filename=')[1].strip()
+                # Check if filename matches expected format: inventory_export_YYYYMMDD_HHMMSS.xlsx
+                import re
+                pattern = r'inventory_export_\d{8}_\d{6}\.xlsx'
+                if re.match(pattern, filename):
+                    print_test_result(
+                        "Excel Export Filename Format", 
+                        True, 
+                        f"Filename matches expected format: {filename}"
+                    )
+                else:
+                    print_test_result(
+                        "Excel Export Filename Format", 
+                        False, 
+                        f"Filename format incorrect: {filename}"
+                    )
+            else:
+                print_test_result(
+                    "Excel Export Filename Format", 
+                    False, 
+                    "No filename found in Content-Disposition header"
+                )
+        else:
+            print_test_result(
+                "Excel Export Filename Format", 
+                False, 
+                f"Status: {response.status_code}"
+            )
+    except Exception as e:
+        print_test_result("Excel Export Filename Format", False, f"Exception: {str(e)}")
+    
+    return True
+
 def test_role_based_access():
     """Test role-based access control"""
     
