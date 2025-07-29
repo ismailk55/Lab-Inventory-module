@@ -1448,7 +1448,15 @@ const Layout = ({ children }) => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center">
-              <h1 className="text-xl font-semibold text-gray-900">Laboratory Inventory</h1>
+              <img 
+                src="https://customer-assets.emergentagent.com/job_lab-inventory-app/artifacts/vclfpmat_naqua%20logo%20full-thumbnail.png" 
+                alt="NAQUA Logo" 
+                className="h-8 w-auto mr-3"
+              />
+              <div>
+                <h1 className="text-xl font-semibold text-gray-900">CENTRAL ANALYTICAL SERVICES</h1>
+                <p className="text-sm text-gray-600">Laboratory Inventory System</p>
+              </div>
             </div>
             
             <div className="flex items-center space-x-4">
