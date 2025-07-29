@@ -236,7 +236,8 @@ async def login(login_data: UserLogin):
             "id": user["id"],
             "employee_number": user["employee_number"],
             "full_name": user["full_name"],
-            "role": user["role"]
+            "role": user["role"],
+            "section": user["section"]
         }
     }
 
