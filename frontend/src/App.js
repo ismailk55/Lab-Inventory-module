@@ -551,30 +551,50 @@ const Inventory = ({ initialFilter = 'all' }) => {
             <tbody className="bg-white divide-y divide-gray-200">
               {filteredItems.map((item) => {
                 const isLowStock = item.quantity <= item.reorder_level;
+                const isBelowReorder = item.quantity < item.reorder_level;
+                const isBelowTarget = item.quantity < item.target_stock_level;
+                const isZeroStock = item.quantity === 0;
                 const isExpired = item.validity && new Date(item.validity) < new Date();
                 const isExpiringSoon = item.validity && 
                   new Date(item.validity) <= new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) &&
                   new Date(item.validity) >= new Date();
 
+                // Determine row background color based on priority
+                let rowClassName = "hover:bg-gray-50";
+                if (isExpired) {
+                  rowClassName = "bg-red-800 text-white hover:bg-red-900"; // Dark red for expired
+                } else if (isZeroStock) {
+                  rowClassName = "bg-red-100 hover:bg-red-200"; // Light red for zero stock
+                } else if (isBelowReorder) {
+                  rowClassName = "bg-yellow-100 hover:bg-yellow-200"; // Light yellow for below reorder
+                }
+
                 return (
-                  <tr key={item.id} className="hover:bg-gray-50">
+                  <tr key={item.id} className={rowClassName}>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="font-medium text-gray-900">{item.item_name}</div>
-                      <div className="text-sm text-gray-500">{item.catalogue_no}</div>
+                      <div className="font-medium text-inherit">{item.item_name}</div>
+                      <div className={`text-sm ${isExpired ? 'text-gray-300' : 'text-gray-500'}`}>{item.catalogue_no}</div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.category}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.location}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-inherit">{item.category}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-inherit">{item.location}</td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="text-sm font-medium">{item.quantity} {item.uom}</span>
+                      <span className={`text-sm font-medium ${
+                        isZeroStock ? 'text-red-600' : 
+                        isBelowReorder ? 'text-yellow-700' : 
+                        'text-inherit'
+                      }`}>
+                        {item.quantity}
+                      </span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.reorder_level}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-inherit">{item.uom}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-inherit">{item.reorder_level}</td>
+                    <td className={`px-6 py-4 whitespace-nowrap text-sm ${isExpired ? 'text-red-300' : 'text-inherit'}`}>
                       {item.validity ? new Date(item.validity).toLocaleDateString() : 'N/A'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex flex-col space-y-1">
                         {isExpired && (
-                          <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-800">
+                          <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-red-200 text-red-900">
                             Expired
                           </span>
                         )}
@@ -583,12 +603,22 @@ const Inventory = ({ initialFilter = 'all' }) => {
                             Expiring Soon
                           </span>
                         )}
-                        {isLowStock && (
+                        {isZeroStock && !isExpired && (
                           <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800">
-                            Low Stock
+                            Zero Stock
                           </span>
                         )}
-                        {!isLowStock && !isExpired && !isExpiringSoon && (
+                        {!isZeroStock && isBelowReorder && !isExpired && (
+                          <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-orange-100 text-orange-800">
+                            Below Reorder
+                          </span>
+                        )}
+                        {!isZeroStock && !isBelowReorder && isBelowTarget && !isExpired && !isExpiringSoon && (
+                          <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800">
+                            Below Target
+                          </span>
+                        )}
+                        {!isLowStock && !isExpired && !isExpiringSoon && !isBelowTarget && (
                           <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
                             In Stock
                           </span>
@@ -599,7 +629,9 @@ const Inventory = ({ initialFilter = 'all' }) => {
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                         <button
                           onClick={() => setEditingItem(item)}
-                          className="text-blue-600 hover:text-blue-900 mr-3"
+                          className={`${
+                            isExpired ? 'text-red-300 hover:text-red-100' : 'text-blue-600 hover:text-blue-900'
+                          } mr-3`}
                         >
                           Edit
                         </button>
