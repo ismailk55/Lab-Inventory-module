@@ -1087,6 +1087,7 @@ const Layout = ({ children }) => {
     { id: 'dashboard', name: 'Dashboard', icon: '📊' },
     { id: 'inventory', name: 'Inventory', icon: '📦' },
     { id: 'requests', name: 'Requests', icon: '📋' },
+    ...(user?.role === 'admin' ? [{ id: 'users', name: 'Users', icon: '👥' }] : []),
   ];
 
   const renderPage = () => {
