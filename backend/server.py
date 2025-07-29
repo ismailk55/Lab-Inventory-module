@@ -548,12 +548,8 @@ async def export_inventory_to_excel(filter: str = 'all', current_user: User = De
                 status = "Expired"
             elif is_zero_stock:
                 status = "Zero Stock"
-            elif is_below_reorder:
-                status = "Below Reorder Level"
             elif is_expiring_soon:
                 status = "Expiring Soon"
-            elif is_below_target:
-                status = "Below Target Stock"
             elif is_low_stock:
                 status = "Low Stock"
             else:
