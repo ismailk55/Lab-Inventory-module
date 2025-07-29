@@ -1776,7 +1776,8 @@ def run_all_tests():
     test_results['inventory'] = test_inventory_management()
     test_results['withdrawal_requests'] = test_withdrawal_requests()
     
-    # NEW TESTS FOR REVIEW REQUEST
+    # NEW TESTS FOR REVIEW REQUEST - Enhanced withdrawal request system with rejection comments
+    test_results['withdrawal_request_rejection_comments'] = test_withdrawal_request_rejection_comments()
     test_results['withdrawal_requests_ordering'] = test_withdrawal_requests_ordering()
     test_results['removed_inventory_filters'] = test_removed_inventory_filters()
     test_results['excel_export_valid_filters'] = test_excel_export_valid_filters()
