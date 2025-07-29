@@ -317,12 +317,6 @@ const Inventory = ({ initialFilter = 'all' }) => {
       case 'low_stock':
         filtered = items.filter(item => item.quantity <= item.reorder_level);
         break;
-      case 'below_reorder':
-        filtered = items.filter(item => item.quantity < item.reorder_level);
-        break;
-      case 'below_target':
-        filtered = items.filter(item => item.quantity < item.target_stock_level);
-        break;
       case 'zero_stock':
         filtered = items.filter(item => item.quantity === 0);
         break;
