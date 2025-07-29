@@ -212,7 +212,8 @@ async def register_user(user_data: UserCreate, admin: User = Depends(get_admin_u
         password_hash=hash_password(user_data.password),
         role=user_data.role,
         full_name=user_data.full_name,
-        email=user_data.email
+        email=user_data.email,
+        section=user_data.section
     )
     
     await db.users.insert_one(user.dict())
