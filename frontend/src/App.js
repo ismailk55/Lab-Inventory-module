@@ -195,30 +195,40 @@ const Dashboard = () => {
 
       {/* Stats Cards */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-        <div className="bg-white p-6 rounded-lg shadow">
-          <div className="text-2xl font-bold text-blue-600">{stats.total_items}</div>
-          <div className="text-sm text-gray-600">Total Items</div>
-        </div>
+        <DashboardCard 
+          title="Total Items"
+          value={stats.total_items}
+          color="blue"
+          onClick={() => window.dashboardNavigation?.('inventory', 'all')}
+        />
         
-        <div className="bg-white p-6 rounded-lg shadow">
-          <div className="text-2xl font-bold text-red-600">{stats.low_stock_items}</div>
-          <div className="text-sm text-gray-600">Low Stock</div>
-        </div>
+        <DashboardCard 
+          title="Low Stock"
+          value={stats.low_stock_items}
+          color="red"
+          onClick={() => window.dashboardNavigation?.('inventory', 'low_stock')}
+        />
         
-        <div className="bg-white p-6 rounded-lg shadow">
-          <div className="text-2xl font-bold text-yellow-600">{stats.expiring_soon}</div>
-          <div className="text-sm text-gray-600">Expiring Soon</div>
-        </div>
+        <DashboardCard 
+          title="Expiring Soon"
+          value={stats.expiring_soon}
+          color="yellow"
+          onClick={() => window.dashboardNavigation?.('inventory', 'expiring_soon')}
+        />
         
-        <div className="bg-white p-6 rounded-lg shadow">
-          <div className="text-2xl font-bold text-gray-600">{stats.expired_items}</div>
-          <div className="text-sm text-gray-600">Expired</div>
-        </div>
+        <DashboardCard 
+          title="Expired"
+          value={stats.expired_items}
+          color="gray"
+          onClick={() => window.dashboardNavigation?.('inventory', 'expired')}
+        />
         
-        <div className="bg-white p-6 rounded-lg shadow">
-          <div className="text-2xl font-bold text-purple-600">{stats.pending_requests}</div>
-          <div className="text-sm text-gray-600">Pending Requests</div>
-        </div>
+        <DashboardCard 
+          title="Pending Requests"
+          value={stats.pending_requests}
+          color="purple"
+          onClick={() => window.dashboardNavigation?.('requests', 'pending')}
+        />
       </div>
 
       {/* Category Stats */}
@@ -235,6 +245,27 @@ const Dashboard = () => {
           ))}
         </div>
       </div>
+    </div>
+  );
+};
+
+// Dashboard Card Component
+const DashboardCard = ({ title, value, color, onClick }) => {
+  const colorClasses = {
+    blue: 'text-blue-600',
+    red: 'text-red-600', 
+    yellow: 'text-yellow-600',
+    gray: 'text-gray-600',
+    purple: 'text-purple-600'
+  };
+
+  return (
+    <div 
+      className="bg-white p-6 rounded-lg shadow cursor-pointer hover:shadow-lg transition-shadow duration-200"
+      onClick={onClick}
+    >
+      <div className={`text-2xl font-bold ${colorClasses[color]}`}>{value}</div>
+      <div className="text-sm text-gray-600">{title}</div>
     </div>
   );
 };
