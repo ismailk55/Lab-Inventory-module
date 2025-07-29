@@ -1463,7 +1463,7 @@ const Layout = ({ children }) => {
               {navigation.map((item) => (
                 <li key={item.id}>
                   <button
-                    onClick={() => setCurrentPage(item.id)}
+                    onClick={() => handleNavigation(item.id)}
                     className={`w-full flex items-center px-3 py-2 text-left rounded-md transition-colors ${
                       currentPage === item.id
                         ? 'bg-blue-100 text-blue-700'
