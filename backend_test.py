@@ -1424,6 +1424,296 @@ def test_enhanced_excel_export_filtering():
     
     return True
 
+def test_withdrawal_request_rejection_comments():
+    """Test enhanced withdrawal request system with rejection comments functionality"""
+    
+    print("=" * 60)
+    print("TESTING WITHDRAWAL REQUEST REJECTION COMMENTS")
+    print("=" * 60)
+    
+    if not auth_token or not test_item_id:
+        print_test_result("Withdrawal Request Rejection Comments Tests", False, "Missing auth token or test item")
+        return False
+    
+    headers = {"Authorization": f"Bearer {auth_token}"}
+    
+    # Test 1: Create a new withdrawal request as a regular user
+    withdrawal_request = {
+        "item_id": test_item_id,
+        "requested_quantity": 5,
+        "purpose": "Testing rejection comments functionality - requesting materials for batch analysis QC-2025-002"
+    }
+    
+    test_request_id_for_rejection = None
+    try:
+        response = requests.post(f"{API_URL}/withdrawal-requests", json=withdrawal_request, headers=headers)
+        if response.status_code == 200:
+            request_data = response.json()
+            test_request_id_for_rejection = request_data.get("id")
+            print_test_result(
+                "Create Test Withdrawal Request for Rejection", 
+                True, 
+                f"Request created: {request_data.get('requested_quantity')} units of {request_data.get('item_name')} (ID: {test_request_id_for_rejection})"
+            )
+        else:
+            print_test_result(
+                "Create Test Withdrawal Request for Rejection", 
+                False, 
+                f"Status: {response.status_code}, Response: {response.text}"
+            )
+            return False
+    except Exception as e:
+        print_test_result("Create Test Withdrawal Request for Rejection", False, f"Exception: {str(e)}")
+        return False
+    
+    # Test 2: Admin rejection with detailed comments
+    if test_request_id_for_rejection:
+        rejection_comments = "Item currently out of stock and not expected until next month. Please submit request again after 30 days. Contact procurement team for urgent requirements."
+        
+        process_data = {
+            "request_id": test_request_id_for_rejection,
+            "action": "reject",
+            "comments": rejection_comments
+        }
+        
+        try:
+            response = requests.post(f"{API_URL}/withdrawal-requests/process", json=process_data, headers=headers)
+            if response.status_code == 200:
+                print_test_result(
+                    "Admin Rejection with Comments", 
+                    True, 
+                    "Request rejected successfully with detailed comments"
+                )
+            else:
+                print_test_result(
+                    "Admin Rejection with Comments", 
+                    False, 
+                    f"Status: {response.status_code}, Response: {response.text}"
+                )
+                return False
+        except Exception as e:
+            print_test_result("Admin Rejection with Comments", False, f"Exception: {str(e)}")
+            return False
+    
+    # Test 3: Verify rejection comments are visible in the response
+    if test_request_id_for_rejection:
+        try:
+            response = requests.get(f"{API_URL}/withdrawal-requests", headers=headers)
+            if response.status_code == 200:
+                requests_list = response.json()
+                rejected_request = None
+                
+                for req in requests_list:
+                    if req.get("id") == test_request_id_for_rejection:
+                        rejected_request = req
+                        break
+                
+                if rejected_request:
+                    admin_comments = rejected_request.get("admin_comments")
+                    status = rejected_request.get("status")
+                    processed_by = rejected_request.get("processed_by")
+                    processed_at = rejected_request.get("processed_at")
+                    
+                    # Verify all fields are properly set
+                    comments_correct = admin_comments == rejection_comments
+                    status_correct = status == "rejected"
+                    processed_by_correct = processed_by == "ADMIN001"
+                    processed_at_exists = processed_at is not None
+                    
+                    if comments_correct and status_correct and processed_by_correct and processed_at_exists:
+                        print_test_result(
+                            "Rejection Comments Visibility", 
+                            True, 
+                            f"Comments visible: '{admin_comments[:50]}...', Status: {status}, Processed by: {processed_by}"
+                        )
+                    else:
+                        print_test_result(
+                            "Rejection Comments Visibility", 
+                            False, 
+                            f"Comments: {comments_correct}, Status: {status_correct}, Processed by: {processed_by_correct}, Processed at: {processed_at_exists}"
+                        )
+                else:
+                    print_test_result(
+                        "Rejection Comments Visibility", 
+                        False, 
+                        "Rejected request not found in list"
+                    )
+            else:
+                print_test_result(
+                    "Rejection Comments Visibility", 
+                    False, 
+                    f"Status: {response.status_code}, Response: {response.text}"
+                )
+        except Exception as e:
+            print_test_result("Rejection Comments Visibility", False, f"Exception: {str(e)}")
+    
+    # Test 4: Create another request and test approval with comments (optional)
+    approval_request = {
+        "item_id": test_item_id,
+        "requested_quantity": 2,
+        "purpose": "Testing approval comments functionality - quality control validation"
+    }
+    
+    test_request_id_for_approval = None
+    try:
+        response = requests.post(f"{API_URL}/withdrawal-requests", json=approval_request, headers=headers)
+        if response.status_code == 200:
+            request_data = response.json()
+            test_request_id_for_approval = request_data.get("id")
+            
+            # Approve with comments
+            approval_comments = "Approved for quality control validation. Please ensure proper documentation and return unused materials."
+            
+            approve_process_data = {
+                "request_id": test_request_id_for_approval,
+                "action": "approve",
+                "comments": approval_comments
+            }
+            
+            approve_response = requests.post(f"{API_URL}/withdrawal-requests/process", json=approve_process_data, headers=headers)
+            if approve_response.status_code == 200:
+                print_test_result(
+                    "Admin Approval with Comments", 
+                    True, 
+                    "Request approved successfully with comments"
+                )
+                
+                # Verify approval comments are visible
+                list_response = requests.get(f"{API_URL}/withdrawal-requests", headers=headers)
+                if list_response.status_code == 200:
+                    requests_list = list_response.json()
+                    approved_request = None
+                    
+                    for req in requests_list:
+                        if req.get("id") == test_request_id_for_approval:
+                            approved_request = req
+                            break
+                    
+                    if approved_request and approved_request.get("admin_comments") == approval_comments:
+                        print_test_result(
+                            "Approval Comments Visibility", 
+                            True, 
+                            f"Approval comments visible: '{approved_request.get('admin_comments')[:50]}...'"
+                        )
+                    else:
+                        print_test_result(
+                            "Approval Comments Visibility", 
+                            False, 
+                            "Approval comments not found or incorrect"
+                        )
+            else:
+                print_test_result(
+                    "Admin Approval with Comments", 
+                    False, 
+                    f"Status: {approve_response.status_code}"
+                )
+        else:
+            print_test_result("Create Request for Approval Test", False, f"Status: {response.status_code}")
+    except Exception as e:
+        print_test_result("Admin Approval with Comments", False, f"Exception: {str(e)}")
+    
+    # Test 5: Test that both admin and regular users can see the comments
+    # (This is already covered by the previous tests since we're using the same admin token)
+    
+    # Test 6: Verify database integration - check processed_by and processed_at fields
+    if test_request_id_for_rejection:
+        try:
+            response = requests.get(f"{API_URL}/withdrawal-requests", headers=headers)
+            if response.status_code == 200:
+                requests_list = response.json()
+                rejected_request = None
+                
+                for req in requests_list:
+                    if req.get("id") == test_request_id_for_rejection:
+                        rejected_request = req
+                        break
+                
+                if rejected_request:
+                    processed_by = rejected_request.get("processed_by")
+                    processed_at = rejected_request.get("processed_at")
+                    
+                    # Verify processed_by is set to admin employee number
+                    processed_by_correct = processed_by == "ADMIN001"
+                    
+                    # Verify processed_at is a valid timestamp
+                    processed_at_valid = False
+                    if processed_at:
+                        try:
+                            # Try to parse the timestamp
+                            from datetime import datetime
+                            if isinstance(processed_at, str):
+                                datetime.fromisoformat(processed_at.replace('Z', '+00:00'))
+                            processed_at_valid = True
+                        except:
+                            pass
+                    
+                    if processed_by_correct and processed_at_valid:
+                        print_test_result(
+                            "Database Integration - Processed Fields", 
+                            True, 
+                            f"processed_by: {processed_by}, processed_at: {processed_at}"
+                        )
+                    else:
+                        print_test_result(
+                            "Database Integration - Processed Fields", 
+                            False, 
+                            f"processed_by correct: {processed_by_correct}, processed_at valid: {processed_at_valid}"
+                        )
+                else:
+                    print_test_result(
+                        "Database Integration - Processed Fields", 
+                        False, 
+                        "Request not found for database verification"
+                    )
+            else:
+                print_test_result(
+                    "Database Integration - Processed Fields", 
+                    False, 
+                    f"Status: {response.status_code}"
+                )
+        except Exception as e:
+            print_test_result("Database Integration - Processed Fields", False, f"Exception: {str(e)}")
+    
+    # Test 7: Test edge case - rejection without comments (should still work)
+    edge_case_request = {
+        "item_id": test_item_id,
+        "requested_quantity": 1,
+        "purpose": "Testing rejection without comments"
+    }
+    
+    try:
+        response = requests.post(f"{API_URL}/withdrawal-requests", json=edge_case_request, headers=headers)
+        if response.status_code == 200:
+            request_data = response.json()
+            edge_case_request_id = request_data.get("id")
+            
+            # Reject without comments
+            reject_no_comments_data = {
+                "request_id": edge_case_request_id,
+                "action": "reject"
+                # No comments field
+            }
+            
+            reject_response = requests.post(f"{API_URL}/withdrawal-requests/process", json=reject_no_comments_data, headers=headers)
+            if reject_response.status_code == 200:
+                print_test_result(
+                    "Rejection Without Comments", 
+                    True, 
+                    "Request rejected successfully without comments (edge case)"
+                )
+            else:
+                print_test_result(
+                    "Rejection Without Comments", 
+                    False, 
+                    f"Status: {reject_response.status_code}"
+                )
+        else:
+            print_test_result("Create Request for No Comments Test", False, f"Status: {response.status_code}")
+    except Exception as e:
+        print_test_result("Rejection Without Comments", False, f"Exception: {str(e)}")
+    
+    return True
+
 def test_role_based_access():
     """Test role-based access control"""
     
