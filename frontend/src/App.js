@@ -433,7 +433,7 @@ const Inventory = ({ initialFilter = 'all' }) => {
         </div>
         <div className="flex space-x-3">
           {/* Filter Buttons */}
-          <div className="flex space-x-2">
+          <div className="flex flex-wrap space-x-2 space-y-1">
             <button
               onClick={() => setCurrentFilter('all')}
               className={`px-3 py-1 text-sm rounded ${
@@ -443,6 +443,36 @@ const Inventory = ({ initialFilter = 'all' }) => {
               }`}
             >
               All
+            </button>
+            <button
+              onClick={() => setCurrentFilter('zero_stock')}
+              className={`px-3 py-1 text-sm rounded ${
+                currentFilter === 'zero_stock'
+                  ? 'bg-red-100 text-red-700'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              Zero Stock
+            </button>
+            <button
+              onClick={() => setCurrentFilter('below_reorder')}
+              className={`px-3 py-1 text-sm rounded ${
+                currentFilter === 'below_reorder'
+                  ? 'bg-orange-100 text-orange-700'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              Below Reorder
+            </button>
+            <button
+              onClick={() => setCurrentFilter('below_target')}
+              className={`px-3 py-1 text-sm rounded ${
+                currentFilter === 'below_target'
+                  ? 'bg-yellow-100 text-yellow-700'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              Below Target
             </button>
             <button
               onClick={() => setCurrentFilter('low_stock')}
