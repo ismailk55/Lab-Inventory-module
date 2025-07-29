@@ -1037,6 +1037,7 @@ def run_all_tests():
     test_results['withdrawal_requests'] = test_withdrawal_requests()
     test_results['dashboard'] = test_dashboard_analytics()
     test_results['email_config'] = test_email_configuration()
+    test_results['excel_export'] = test_excel_export()
     test_results['role_access'] = test_role_based_access()
     
     # Summary
