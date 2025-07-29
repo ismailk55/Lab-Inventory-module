@@ -506,10 +506,6 @@ async def export_inventory_to_excel(filter: str = 'all', current_user: User = De
                 include_item = True
             elif filter == 'low_stock':
                 include_item = is_low_stock
-            elif filter == 'below_reorder':
-                include_item = is_below_reorder
-            elif filter == 'below_target':
-                include_item = is_below_target
             elif filter == 'zero_stock':
                 include_item = is_zero_stock
             elif filter == 'expiring_soon':
