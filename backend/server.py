@@ -323,9 +323,11 @@ async def create_withdrawal_request(request_data: WithdrawalRequestCreate, curre
 @api_router.get("/withdrawal-requests", response_model=List[WithdrawalRequest])
 async def get_withdrawal_requests(current_user: User = Depends(get_current_user)):
     if current_user.role == UserRole.ADMIN:
-        requests = await db.withdrawal_requests.find().to_list(1000)
+        # Sort by created_at in descending order (newest first)
+        requests = await db.withdrawal_requests.find().sort("created_at", -1).to_list(1000)
     else:
-        requests = await db.withdrawal_requests.find({"requested_by": current_user.id}).to_list(1000)
+        # Sort by created_at in descending order (newest first)
+        requests = await db.withdrawal_requests.find({"requested_by": current_user.id}).sort("created_at", -1).to_list(1000)
     
     return [WithdrawalRequest(**request) for request in requests]
 
