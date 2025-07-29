@@ -517,6 +517,239 @@ def test_email_configuration():
     
     return True
 
+def test_user_management():
+    """Test new user management functionality"""
+    
+    print("=" * 60)
+    print("TESTING USER MANAGEMENT FUNCTIONALITY")
+    print("=" * 60)
+    
+    if not auth_token:
+        print_test_result("User Management Tests", False, "No auth token available")
+        return False
+    
+    headers = {"Authorization": f"Bearer {auth_token}"}
+    test_user_id = None
+    
+    # Test 1: Verify login response includes section field
+    try:
+        login_data = {
+            "employee_number": "ADMIN001",
+            "password": "admin123"
+        }
+        response = requests.post(f"{API_URL}/login", json=login_data)
+        if response.status_code == 200:
+            data = response.json()
+            user_data = data.get("user", {})
+            section = user_data.get("section")
+            if section == "IT Administration":
+                print_test_result(
+                    "Login Response Includes Section Field", 
+                    True, 
+                    f"Section field present: {section}"
+                )
+            else:
+                print_test_result(
+                    "Login Response Includes Section Field", 
+                    False, 
+                    f"Expected 'IT Administration', got: {section}"
+                )
+        else:
+            print_test_result(
+                "Login Response Includes Section Field", 
+                False, 
+                f"Login failed with status: {response.status_code}"
+            )
+    except Exception as e:
+        print_test_result("Login Response Includes Section Field", False, f"Exception: {str(e)}")
+    
+    # Test 2: Verify profile response includes section field
+    try:
+        response = requests.get(f"{API_URL}/profile", headers=headers)
+        if response.status_code == 200:
+            profile_data = response.json()
+            section = profile_data.get("section")
+            if section == "IT Administration":
+                print_test_result(
+                    "Profile Response Includes Section Field", 
+                    True, 
+                    f"Section field present: {section}"
+                )
+            else:
+                print_test_result(
+                    "Profile Response Includes Section Field", 
+                    False, 
+                    f"Expected 'IT Administration', got: {section}"
+                )
+        else:
+            print_test_result(
+                "Profile Response Includes Section Field", 
+                False, 
+                f"Profile access failed with status: {response.status_code}"
+            )
+    except Exception as e:
+        print_test_result("Profile Response Includes Section Field", False, f"Exception: {str(e)}")
+    
+    # Test 3: List all users (admin only)
+    try:
+        response = requests.get(f"{API_URL}/users", headers=headers)
+        if response.status_code == 200:
+            users = response.json()
+            admin_user = None
+            for user in users:
+                if user.get("employee_number") == "ADMIN001":
+                    admin_user = user
+                    break
+            
+            if admin_user and admin_user.get("section") == "IT Administration":
+                print_test_result(
+                    "List All Users with Section Field", 
+                    True, 
+                    f"Retrieved {len(users)} users, admin section: {admin_user.get('section')}"
+                )
+            else:
+                print_test_result(
+                    "List All Users with Section Field", 
+                    False, 
+                    f"Admin user section not found or incorrect"
+                )
+        else:
+            print_test_result(
+                "List All Users with Section Field", 
+                False, 
+                f"Status: {response.status_code}, Response: {response.text}"
+            )
+    except Exception as e:
+        print_test_result("List All Users with Section Field", False, f"Exception: {str(e)}")
+    
+    # Test 4: Create new test user with section field
+    test_user_data = {
+        "employee_number": "QC001",
+        "password": "test123",
+        "role": "user",
+        "full_name": "John Doe",
+        "email": "john.doe@company.com",
+        "section": "Quality Control Department"
+    }
+    
+    try:
+        response = requests.post(f"{API_URL}/register", json=test_user_data, headers=headers)
+        if response.status_code == 200:
+            print_test_result(
+                "Create New User with Section Field", 
+                True, 
+                f"User created: {test_user_data['full_name']} in {test_user_data['section']}"
+            )
+            
+            # Get the user ID for deletion test
+            users_response = requests.get(f"{API_URL}/users", headers=headers)
+            if users_response.status_code == 200:
+                users = users_response.json()
+                for user in users:
+                    if user.get("employee_number") == "QC001":
+                        test_user_id = user.get("id")
+                        break
+        else:
+            print_test_result(
+                "Create New User with Section Field", 
+                False, 
+                f"Status: {response.status_code}, Response: {response.text}"
+            )
+    except Exception as e:
+        print_test_result("Create New User with Section Field", False, f"Exception: {str(e)}")
+    
+    # Test 5: Verify new user appears in users list
+    try:
+        response = requests.get(f"{API_URL}/users", headers=headers)
+        if response.status_code == 200:
+            users = response.json()
+            new_user = None
+            for user in users:
+                if user.get("employee_number") == "QC001":
+                    new_user = user
+                    break
+            
+            if new_user and new_user.get("section") == "Quality Control Department":
+                print_test_result(
+                    "Verify New User in List", 
+                    True, 
+                    f"New user found: {new_user.get('full_name')} - {new_user.get('section')}"
+                )
+            else:
+                print_test_result(
+                    "Verify New User in List", 
+                    False, 
+                    "New user not found in users list or section incorrect"
+                )
+        else:
+            print_test_result(
+                "Verify New User in List", 
+                False, 
+                f"Status: {response.status_code}"
+            )
+    except Exception as e:
+        print_test_result("Verify New User in List", False, f"Exception: {str(e)}")
+    
+    # Test 6: Test user deletion
+    if test_user_id:
+        try:
+            response = requests.delete(f"{API_URL}/users/{test_user_id}", headers=headers)
+            if response.status_code == 200:
+                print_test_result(
+                    "Delete Test User", 
+                    True, 
+                    "Test user deleted successfully"
+                )
+            else:
+                print_test_result(
+                    "Delete Test User", 
+                    False, 
+                    f"Status: {response.status_code}, Response: {response.text}"
+                )
+        except Exception as e:
+            print_test_result("Delete Test User", False, f"Exception: {str(e)}")
+    
+    # Test 7: Test admin self-deletion prevention
+    if admin_user_data:
+        admin_id = admin_user_data.get("id")
+        try:
+            response = requests.delete(f"{API_URL}/users/{admin_id}", headers=headers)
+            if response.status_code == 400:
+                print_test_result(
+                    "Prevent Admin Self-Deletion", 
+                    True, 
+                    "Correctly prevented admin from deleting own account"
+                )
+            else:
+                print_test_result(
+                    "Prevent Admin Self-Deletion", 
+                    False, 
+                    f"Expected 400, got {response.status_code}"
+                )
+        except Exception as e:
+            print_test_result("Prevent Admin Self-Deletion", False, f"Exception: {str(e)}")
+    
+    # Test 8: Test role-based access to user management endpoints
+    try:
+        # Try to access users endpoint without token
+        response = requests.get(f"{API_URL}/users")
+        if response.status_code == 403 or response.status_code == 401:
+            print_test_result(
+                "User Management Endpoint Protection", 
+                True, 
+                f"Correctly blocked unauthorized access (Status: {response.status_code})"
+            )
+        else:
+            print_test_result(
+                "User Management Endpoint Protection", 
+                False, 
+                f"Expected 401/403, got {response.status_code}"
+            )
+    except Exception as e:
+        print_test_result("User Management Endpoint Protection", False, f"Exception: {str(e)}")
+    
+    return True
+
 def test_role_based_access():
     """Test role-based access control"""
     
