@@ -191,7 +191,8 @@ async def create_default_admin():
             password_hash=hash_password("admin123"),
             role=UserRole.ADMIN,
             full_name="System Administrator",
-            email="admin@company.com"
+            email="admin@company.com",
+            section="IT Administration"
         )
         await db.users.insert_one(admin_user.dict())
         print("Default admin user created - Employee Number: ADMIN001, Password: admin123")
