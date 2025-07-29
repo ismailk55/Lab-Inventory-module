@@ -974,6 +974,212 @@ def test_excel_export():
     
     return True
 
+def test_enhanced_excel_export_filtering():
+    """Test enhanced Excel export functionality with filtering parameters"""
+    
+    print("=" * 60)
+    print("TESTING ENHANCED EXCEL EXPORT WITH FILTERING")
+    print("=" * 60)
+    
+    if not auth_token:
+        print_test_result("Enhanced Excel Export Tests", False, "No auth token available")
+        return False
+    
+    headers = {"Authorization": f"Bearer {auth_token}"}
+    
+    # Available filters to test
+    filters_to_test = [
+        'all',
+        'low_stock', 
+        'below_reorder',
+        'below_target',
+        'zero_stock',
+        'expiring_soon',
+        'expired'
+    ]
+    
+    # First, let's add some test inventory items with different conditions to ensure we have data for filtering
+    test_items = [
+        {
+            "item_name": "Low Stock Test Item",
+            "category": "Test Equipment",
+            "location": "Test Lab A",
+            "manufacturer": "Test Manufacturer",
+            "supplier": "Test Supplier",
+            "model": "LOW-001",
+            "uom": "pieces",
+            "catalogue_no": "LOW001",
+            "quantity": 2,  # Below reorder level
+            "target_stock_level": 20,
+            "reorder_level": 5,
+            "validity": (datetime.utcnow() + timedelta(days=365)).isoformat(),
+            "use_case": "Testing low stock filtering"
+        },
+        {
+            "item_name": "Zero Stock Test Item",
+            "category": "Test Equipment",
+            "location": "Test Lab B",
+            "manufacturer": "Test Manufacturer",
+            "supplier": "Test Supplier",
+            "model": "ZERO-001",
+            "uom": "pieces",
+            "catalogue_no": "ZERO001",
+            "quantity": 0,  # Zero stock
+            "target_stock_level": 15,
+            "reorder_level": 3,
+            "validity": (datetime.utcnow() + timedelta(days=365)).isoformat(),
+            "use_case": "Testing zero stock filtering"
+        },
+        {
+            "item_name": "Expiring Soon Test Item",
+            "category": "Test Chemicals",
+            "location": "Test Lab C",
+            "manufacturer": "Test Manufacturer",
+            "supplier": "Test Supplier",
+            "model": "EXP-001",
+            "uom": "bottles",
+            "catalogue_no": "EXP001",
+            "quantity": 10,
+            "target_stock_level": 15,
+            "reorder_level": 3,
+            "validity": (datetime.utcnow() + timedelta(days=15)).isoformat(),  # Expiring in 15 days
+            "use_case": "Testing expiring soon filtering"
+        },
+        {
+            "item_name": "Expired Test Item",
+            "category": "Test Chemicals",
+            "location": "Test Lab D",
+            "manufacturer": "Test Manufacturer",
+            "supplier": "Test Supplier",
+            "model": "EXPIRED-001",
+            "uom": "bottles",
+            "catalogue_no": "EXPIRED001",
+            "quantity": 5,
+            "target_stock_level": 10,
+            "reorder_level": 2,
+            "validity": (datetime.utcnow() - timedelta(days=30)).isoformat(),  # Expired 30 days ago
+            "use_case": "Testing expired filtering"
+        }
+    ]
+    
+    # Add test items for filtering
+    added_item_ids = []
+    for item in test_items:
+        try:
+            response = requests.post(f"{API_URL}/inventory", json=item, headers=headers)
+            if response.status_code == 200:
+                item_data = response.json()
+                added_item_ids.append(item_data.get("id"))
+        except Exception as e:
+            print(f"Warning: Could not add test item {item['item_name']}: {str(e)}")
+    
+    print(f"Added {len(added_item_ids)} test items for filtering tests")
+    
+    # Test each filter
+    for filter_name in filters_to_test:
+        try:
+            response = requests.get(f"{API_URL}/inventory/export/excel?filter={filter_name}", headers=headers)
+            
+            if response.status_code == 200:
+                # Check Content-Type header
+                content_type = response.headers.get('content-type', '')
+                expected_content_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                
+                # Check Content-Disposition header for filename
+                content_disposition = response.headers.get('content-disposition', '')
+                filename = ""
+                if 'filename=' in content_disposition:
+                    filename = content_disposition.split('filename=')[1].strip()
+                
+                # Verify filename includes filter suffix when not 'all'
+                expected_filter_in_filename = filter_name != 'all'
+                has_filter_in_filename = filter_name in filename if expected_filter_in_filename else True
+                
+                # Check file content
+                content = response.content
+                content_length = len(content)
+                is_valid_excel = content.startswith(b'PK')
+                
+                # Determine test success
+                test_success = (
+                    content_type == expected_content_type and
+                    content_length > 1000 and  # Reasonable file size
+                    is_valid_excel and
+                    has_filter_in_filename
+                )
+                
+                print_test_result(
+                    f"Excel Export Filter: {filter_name}", 
+                    test_success, 
+                    f"Status: 200, Size: {content_length} bytes, Filename: {filename}, Filter in name: {has_filter_in_filename}"
+                )
+                
+            elif response.status_code == 404:
+                # This is acceptable for some filters if no matching data exists
+                print_test_result(
+                    f"Excel Export Filter: {filter_name}", 
+                    True, 
+                    f"Status: 404 - No items found for filter (acceptable)"
+                )
+                
+            else:
+                print_test_result(
+                    f"Excel Export Filter: {filter_name}", 
+                    False, 
+                    f"Status: {response.status_code}, Response: {response.text[:200]}"
+                )
+                
+        except Exception as e:
+            print_test_result(f"Excel Export Filter: {filter_name}", False, f"Exception: {str(e)}")
+    
+    # Test invalid filter parameter
+    try:
+        response = requests.get(f"{API_URL}/inventory/export/excel?filter=invalid_filter", headers=headers)
+        # Should still work but treat as 'all' or return appropriate error
+        if response.status_code in [200, 404]:
+            print_test_result(
+                "Excel Export Invalid Filter", 
+                True, 
+                f"Handled invalid filter gracefully (Status: {response.status_code})"
+            )
+        else:
+            print_test_result(
+                "Excel Export Invalid Filter", 
+                False, 
+                f"Unexpected status for invalid filter: {response.status_code}"
+            )
+    except Exception as e:
+        print_test_result("Excel Export Invalid Filter", False, f"Exception: {str(e)}")
+    
+    # Test multiple filter parameters (should use the first one)
+    try:
+        response = requests.get(f"{API_URL}/inventory/export/excel?filter=all&filter=low_stock", headers=headers)
+        if response.status_code in [200, 404]:
+            print_test_result(
+                "Excel Export Multiple Filter Parameters", 
+                True, 
+                f"Handled multiple filter parameters (Status: {response.status_code})"
+            )
+        else:
+            print_test_result(
+                "Excel Export Multiple Filter Parameters", 
+                False, 
+                f"Status: {response.status_code}"
+            )
+    except Exception as e:
+        print_test_result("Excel Export Multiple Filter Parameters", False, f"Exception: {str(e)}")
+    
+    # Clean up test items
+    for item_id in added_item_ids:
+        try:
+            requests.delete(f"{API_URL}/inventory/{item_id}", headers=headers)
+        except:
+            pass  # Ignore cleanup errors
+    
+    print(f"Cleaned up {len(added_item_ids)} test items")
+    
+    return True
+
 def test_role_based_access():
     """Test role-based access control"""
     
