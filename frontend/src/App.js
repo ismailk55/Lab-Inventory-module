@@ -421,6 +421,15 @@ const Inventory = ({ initialFilter = 'all' }) => {
               Expired
             </button>
           </div>
+
+          {/* Download Excel Button */}
+          <button
+            onClick={downloadExcel}
+            className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 flex items-center space-x-2"
+          >
+            <span>📊</span>
+            <span>Download Excel</span>
+          </button>
           
           {isAdmin && (
             <button
