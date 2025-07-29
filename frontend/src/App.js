@@ -1136,6 +1136,9 @@ const WithdrawalRequests = ({ initialFilter = 'all' }) => {
   const [requests, setRequests] = useState([]);
   const [filteredRequests, setFilteredRequests] = useState([]);
   const [showRequestForm, setShowRequestForm] = useState(false);
+  const [showRejectModal, setShowRejectModal] = useState(false);
+  const [rejectingRequestId, setRejectingRequestId] = useState(null);
+  const [rejectionComment, setRejectionComment] = useState('');
   const [inventory, setInventory] = useState([]);
   const [currentFilter, setCurrentFilter] = useState(initialFilter);
   const { user } = useAuth();
@@ -1199,6 +1202,24 @@ const WithdrawalRequests = ({ initialFilter = 'all' }) => {
       fetchRequests();
     } catch (error) {
       console.error('Failed to process request:', error);
+      alert('Failed to process request. Please try again.');
+    }
+  };
+
+  const handleReject = (requestId) => {
+    setRejectingRequestId(requestId);
+    setRejectionComment('');
+    setShowRejectModal(true);
+  };
+
+  const confirmReject = () => {
+    if (rejectingRequestId && rejectionComment.trim()) {
+      processRequest(rejectingRequestId, 'reject', rejectionComment.trim());
+      setShowRejectModal(false);
+      setRejectingRequestId(null);
+      setRejectionComment('');
+    } else {
+      alert('Please provide a reason for rejection.');
     }
   };
 
@@ -1310,6 +1331,7 @@ const WithdrawalRequests = ({ initialFilter = 'all' }) => {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Purpose</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Admin Comments</th>
                 {isAdmin && <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>}
               </tr>
             </thead>
@@ -1325,8 +1347,10 @@ const WithdrawalRequests = ({ initialFilter = 'all' }) => {
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                     {request.requested_by_name}
                   </td>
-                  <td className="px-6 py-4 text-sm text-gray-900 max-w-xs truncate">
-                    {request.purpose}
+                  <td className="px-6 py-4 text-sm text-gray-900 max-w-xs">
+                    <div className="truncate" title={request.purpose}>
+                      {request.purpose}
+                    </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
@@ -1340,6 +1364,29 @@ const WithdrawalRequests = ({ initialFilter = 'all' }) => {
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                     {new Date(request.created_at).toLocaleDateString()}
                   </td>
+                  <td className="px-6 py-4 text-sm text-gray-900 max-w-xs">
+                    {request.admin_comments ? (
+                      <div className={`p-2 rounded text-xs ${
+                        request.status === 'rejected' 
+                          ? 'bg-red-50 text-red-700 border border-red-200' 
+                          : 'bg-gray-50 text-gray-700 border border-gray-200'
+                      }`}>
+                        <div className="font-semibold text-xs mb-1">
+                          {request.status === 'rejected' ? 'Rejection Reason:' : 'Admin Note:'}
+                        </div>
+                        <div className="break-words">
+                          {request.admin_comments}
+                        </div>
+                        {request.processed_by && (
+                          <div className="text-xs text-gray-500 mt-1">
+                            - {request.processed_by}
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <span className="text-gray-400 text-xs">No comments</span>
+                    )}
+                  </td>
                   {isAdmin && request.status === 'pending' && (
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                       <button
@@ -1349,7 +1396,7 @@ const WithdrawalRequests = ({ initialFilter = 'all' }) => {
                         Approve
                       </button>
                       <button
-                        onClick={() => processRequest(request.id, 'reject')}
+                        onClick={() => handleReject(request.id)}
                         className="text-red-600 hover:text-red-900"
                       >
                         Reject
@@ -1391,6 +1438,54 @@ const WithdrawalRequests = ({ initialFilter = 'all' }) => {
             setShowRequestForm(false);
           }}
         />
+      )}
+
+      {/* Rejection Comment Modal */}
+      {showRejectModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg max-w-md w-full">
+            <div className="p-6">
+              <h2 className="text-xl font-bold mb-4 text-red-600">Reject Withdrawal Request</h2>
+              <p className="text-gray-600 mb-4">
+                Please provide a reason for rejecting this withdrawal request. This will be visible to the user.
+              </p>
+              
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Reason for Rejection *
+                </label>
+                <textarea
+                  value={rejectionComment}
+                  onChange={(e) => setRejectionComment(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500"
+                  rows="4"
+                  placeholder="Enter the reason for rejecting this request..."
+                  required
+                />
+              </div>
+              
+              <div className="flex justify-end space-x-3">
+                <button
+                  onClick={() => {
+                    setShowRejectModal(false);
+                    setRejectingRequestId(null);
+                    setRejectionComment('');
+                  }}
+                  className="px-4 py-2 text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={confirmReject}
+                  className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
+                  disabled={!rejectionComment.trim()}
+                >
+                  Confirm Rejection
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
