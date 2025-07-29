@@ -437,9 +437,10 @@ async def delete_email_config(email_id: str, admin: User = Depends(get_admin_use
 @api_router.get("/users")
 async def get_all_users(admin: User = Depends(get_admin_user)):
     users = await db.users.find().to_list(1000)
-    # Remove password_hash from response
+    # Remove password_hash and _id from response
     for user in users:
         user.pop('password_hash', None)
+        user.pop('_id', None)
     return users
 
 @api_router.delete("/users/{user_id}")
