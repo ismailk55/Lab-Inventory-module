@@ -248,11 +248,7 @@ metadata:
   run_ui: false
 
 test_plan:
-  current_focus:
-    - "User Authentication System with JWT"
-    - "Inventory Management CRUD Operations"
-    - "Withdrawal Request System"
-    - "Dashboard Analytics API"
+  current_focus: []
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
