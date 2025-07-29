@@ -368,6 +368,37 @@ const Inventory = ({ initialFilter = 'all' }) => {
     }
   };
 
+  const downloadExcel = async () => {
+    try {
+      const response = await axios.get(`${API}/inventory/export/excel`, {
+        responseType: 'blob', // Important for file download
+      });
+      
+      // Create blob link to download
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      
+      // Generate filename with timestamp
+      const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
+      link.setAttribute('download', `inventory_export_${timestamp}.xlsx`);
+      
+      // Append to html link element page
+      document.body.appendChild(link);
+      
+      // Start download
+      link.click();
+      
+      // Clean up and remove the link
+      link.parentNode.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      
+    } catch (error) {
+      console.error('Failed to download Excel file:', error);
+      alert('Failed to download Excel file. Please try again.');
+    }
+  };
+
   const isAdmin = user?.role === 'admin';
 
   return (
